@@ -2,6 +2,7 @@ import os
 
 # Never put credentials in your code!
 from dotenv import load_dotenv
+from twelvelabs import TwelveLabs
 
 load_dotenv()
 
@@ -36,6 +37,9 @@ INSTALLED_APPS = [
     'storages',
 
     'cattube.core',
+
+    'huey.contrib.djhuey',
+    'huey_django_orm',
 ]
 
 MIDDLEWARE = [
@@ -103,25 +107,58 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'home'
 
-# Set these in a .env file or as environment variables
-AWS_ACCESS_KEY_ID = os.environ['AWS_ACCESS_KEY_ID']
-AWS_SECRET_ACCESS_KEY = os.environ['AWS_SECRET_ACCESS_KEY']
-AWS_STORAGE_BUCKET_NAME = os.environ['AWS_STORAGE_BUCKET_NAME']
-AWS_S3_REGION_NAME = os.environ['AWS_S3_REGION_NAME']
-
-AWS_S3_ENDPOINT = f's3.{AWS_S3_REGION_NAME}.backblazeb2.com'
-AWS_S3_ENDPOINT_URL = f'https://{AWS_S3_ENDPOINT}'
-
-AWS_S3_CUSTOM_DOMAIN = os.environ['BUNNY_PULL_ZONE_DOMAIN']
+# TBD Fastly
+# AWS_S3_CUSTOM_DOMAIN = '...'
 
 AWS_S3_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400',
 }
 
-AWS_STATIC_LOCATION = 'static'
-STATICFILES_STORAGE = 'cattube.storage_backends.StaticStorage'
-STATIC_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
+# Lifetime for presigned URLs
+AWS_QUERYSTRING_EXPIRE = 86400
+
+STATIC_S3_REGION_NAME = os.environ['STATIC_S3_REGION_NAME']
+STATIC_STORAGE_BUCKET_NAME = os.environ['STATIC_STORAGE_BUCKET_NAME']
+
+STATIC_URL = f'https://{STATIC_STORAGE_BUCKET_NAME}.s3.{STATIC_S3_REGION_NAME}.backblazeb2.com/'
+
+STORAGES = {
+    "default": {
+        "BACKEND": "cattube.storage.CachedS3Storage",
+        "OPTIONS": {
+            "access_key": os.environ['DEFAULT_ACCESS_KEY_ID'],
+            "secret_key": os.environ['DEFAULT_SECRET_ACCESS_KEY'],
+            "region_name": os.environ['DEFAULT_S3_REGION_NAME'],
+            "bucket_name": os.environ['DEFAULT_STORAGE_BUCKET_NAME'],
+            "location": os.environ['DEFAULT_STORAGE_LOCATION'],
+        },
+    },
+    "staticfiles": {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": os.environ['STATIC_ACCESS_KEY_ID'],
+            "secret_key": os.environ['STATIC_SECRET_ACCESS_KEY'],
+            "region_name": os.environ['STATIC_S3_REGION_NAME'],
+            "bucket_name": os.environ['STATIC_STORAGE_BUCKET_NAME'],
+            "location": os.environ['STATIC_STORAGE_LOCATION'],
+        },
+    },
+}
 
 TRANSLOADIT_KEY = os.environ['TRANSLOADIT_KEY']
 TRANSLOADIT_SECRET = os.environ['TRANSLOADIT_SECRET']
 TRANSLOADIT_TEMPLATE_ID = os.environ['TRANSLOADIT_TEMPLATE_ID']
+POLL_TRANSLOADIT = True
+
+HUEY = {
+    'huey_class': 'huey_django_orm.storage.DjangoORMHuey',
+    'immediate': False,
+}
+
+VIDEOS_PATH = ':original'
+THUMBNAILS_PATH = 'thumbnail'
+
+TWELVE_LABS_INDEX_ID = os.environ['TWELVE_LABS_INDEX_ID']
+TWELVE_LABS_POLL_INTERVAL = 1
+
+TL_CLIENT = TwelveLabs(api_key=os.environ['TWELVE_LABS_API_KEY'])

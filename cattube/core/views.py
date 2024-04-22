@@ -1,32 +1,23 @@
-import json
-import hmac
 import hashlib
+import hmac
 import json
 from datetime import datetime, timedelta
+from urllib.parse import urlsplit, urlunsplit
+
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
 from django.utils.safestring import mark_safe
-from django.views.decorators.cache import never_cache
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView
 from django.views.generic.edit import DeleteView
 from django.views.generic.list import ListView
-from django.shortcuts import get_object_or_404
-from rest_framework import status
-from rest_framework.decorators import api_view
-from rest_framework.decorators import parser_classes
-from rest_framework.parsers import FormParser
-from rest_framework.response import Response
-from urllib.parse import urlsplit, urlunsplit
 
-from .models import Video
-from .serializers import VideoSerializer, NotificationSerializer
+from cattube.settings import TL_CLIENT, TWELVE_LABS_INDEX_ID, POLL_TRANSLOADIT
+from .models import Video, SearchResult
+from .tasks import poll_video_loading
 
-videos_url_path = f'https://{settings.AWS_S3_CUSTOM_DOMAIN}/watermarked/'
-thumbnails_url_path = f'https://{settings.AWS_S3_CUSTOM_DOMAIN}/thumbnail/'
 
 # From https://codereview.stackexchange.com/a/24416/27914
 def url_path_join(*parts):
@@ -46,11 +37,51 @@ def first(sequence, default=''):
 
 class VideoListView(ListView):
     model = Video
+    paginate_by = 12
+    ordering = ['-uploaded_at']
+
+
+class VideoSearchView(ListView):
+    model = Video
+    paginate_by = 2
+    template_name = "core/video_results.html"
+
+    def get_queryset(self):
+        query = self.request.GET.get("query", None)
+
+        # Search indexed videos for the query string
+        result = TL_CLIENT.search.query(
+            TWELVE_LABS_INDEX_ID,
+            query,
+            ["visual", "conversation", "text_in_video", "logo"],
+            group_by="video",
+            threshold="medium"
+        )
+
+        # Search results may be in multiple pages, so we need to loop until we're done retrieving them
+        search_data = result.data
+        print(f"First page's data: {search_data}")
+
+        search_results = []
+        while True:
+            # Do a database query to get the videos for each page of results
+            video_ids = [group.id for group in search_data]
+            videos = Video.objects.filter(video_id__in=video_ids)
+            search_results += [SearchResult(video=videos.get(video_id__exact=group.id), group=group) for group in search_data]
+
+            # Is there another page?
+            try:
+                search_data = next(result)
+                print(f"Next page's data: {search_data}")
+            except StopIteration:
+                print("There is no next page in search result")
+                break
+
+        return search_results
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        videos = Video.objects.all()
-        context['videos'] = videos
+        context['query'] = self.request.GET.get("query", None)
         return context
 
 
@@ -69,25 +100,22 @@ class VideoCreateView(CreateView):
         return reverse_lazy('watch', kwargs={'video_id': self.object.id})
 
     def get_context_data(self, **kwargs):
-        template_id = settings.TRANSLOADIT_TEMPLATE_ID
-        notify_url = self.request.build_absolute_uri(reverse('notification'))  # .replace("http:", "https:")
-
         # Signature calculation from
         # https://transloadit.com/docs/topics/signature-authentication/#signature-python-sdk-demo
         expires = (timedelta(seconds=60 * 60) + datetime.utcnow()).strftime("%Y/%m/%d %H:%M:%S+00:00")
-        auth_key = settings.TRANSLOADIT_KEY
-        auth_secret = settings.TRANSLOADIT_SECRET
         params = {
             'auth': {
-                'key': auth_key,
+                'key': settings.TRANSLOADIT_KEY,
                 'expires': expires,
             },
-            'template_id': template_id,
-            'notify_url': notify_url
+            'template_id': settings.TRANSLOADIT_TEMPLATE_ID,
         }
 
+        if not POLL_TRANSLOADIT:
+            params['notify_url'] = self.request.build_absolute_uri(reverse('notification'))
+
         message = json.dumps(params, separators=(',', ':'), ensure_ascii=False)
-        signature = hmac.new(auth_secret.encode('utf-8'),
+        signature = hmac.new(settings.TRANSLOADIT_SECRET.encode('utf-8'),
                              message.encode('utf-8'),
                              hashlib.sha384).hexdigest()
 
@@ -97,10 +125,13 @@ class VideoCreateView(CreateView):
         context['signature'] = 'sha384:' + signature
         return context
 
+    # noinspection PyAttributeOutsideInit
     def form_valid(self, form):
         self.object = form.save(commit=False)
         self.object.user = self.request.user
         self.object.save()
+        if POLL_TRANSLOADIT:
+            poll_video_loading(form.data['assembly_id'])
         return super().form_valid(form)
 
 
@@ -112,48 +143,3 @@ class VideoDeleteView(DeleteView):
 
     def get_success_url(self):
         return reverse('home')
-
-
-@login_required
-def delete_all_videos(request):
-    print('Deleting all the videos!')
-    Video.objects.all().delete()
-    return HttpResponseRedirect(reverse('home'))
-
-
-# JavaScript polls this endpoint - we don't want the browser to cache the response!
-@never_cache
-@api_view(['GET'])
-def video_detail(request, video_id):
-    print(f'Received request for detail on: {video_id}')
-
-    doc = get_object_or_404(Video, id=video_id)
-    serializer = VideoSerializer(doc)
-    print(f'Returning : {serializer.data}')
-    return Response(serializer.data)
-
-
-@api_view(['POST'])
-@parser_classes([FormParser])
-def receive_notification_from_transcoder(request):
-    serializer = NotificationSerializer(data=request.data)
-    if serializer.is_valid():
-        print(f'Received notification: {serializer.data}')
-
-        # Remove the path prefixes from the object keys
-        transloadit = json.loads(serializer.data['transloadit'])
-        assembly_id = transloadit['assembly_id']
-
-        print(f'Getting {assembly_id}')
-        doc = get_object_or_404(Video, assembly_id=assembly_id)
-
-        doc.transcoded = url_path_join(videos_url_path, assembly_id, transloadit['results']['watermarked'][0]['name'])
-        doc.thumbnail = url_path_join(thumbnails_url_path, assembly_id, transloadit['results']['thumbnail'][0]['name'])
-
-        print(f'Saving {doc}')
-        doc.save()
-
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    print(f'Serializer errors: {serializer.errors}')
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

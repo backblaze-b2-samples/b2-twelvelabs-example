@@ -12,6 +12,11 @@ body {
     margin: 40px auto;
 }
 
+a.logo {
+    color: inherit;
+    text-decoration: inherit;
+}
+
 table {
     border-collapse: collapse;
     width: 100%;
@@ -49,4 +54,31 @@ input[type="file"] {
 
 div.logo-strip > a {
     text-decoration: none;
+}
+
+div.thumbnail {
+    z-index: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+div.thumbnail:after {
+    content: attr(data-status);
+    color: white;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%);
+    font-size: 50px;
+    font-weight: bold;
+    -webkit-text-stroke: 1px black;
+    position: absolute;
+    z-index: 10;
+}
+
+img.thumbnail {
+    border: 1px solid #c0c0c0;
+}
+
+div.buttonbar {
+    margin-top: 10px;
 }

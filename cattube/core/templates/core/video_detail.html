@@ -5,9 +5,9 @@
     <a href="{% url 'home' %}">Home</a>
     / <a href="{% url 'logout' %}">Log out</a>
     <hr>
-{% if object.transcoded %}
+{% if object.original %}
     <video width="640" height="360" controls>
-        <source src="{{ object.transcoded }}" type="video/mp4">
+        <source src="{{ object.original.url }}" type="video/mp4">
     </video>
     <h2>{{ object.title }}</h2>
     {{ video.user.username }}<br>
@@ -18,7 +18,7 @@
     <img id="throbber" src="{% static 'images/throbber.gif' %}">
 
     <script>
-        async function pollForTranscoded(id) {
+        async function pollForThumbnail(id) {
             console.log(`Polling for ${id}`)
             const response = await fetch(`/api/videos/${id}`)
                 .then(response => {
@@ -27,14 +27,14 @@
                     }
                 });
 
-            if (response?.transcoded) {
+            if (response?.thumbnail) {
                 location.reload();
             }
         }
 
         async function handleLoad(event) {
             const id = location.pathname.split('/').pop();
-            setInterval(pollForTranscoded, 1000, id);
+            setInterval(pollForThumbnail, 1000, id);
         }
 
         window.onload = handleLoad;

@@ -10,10 +10,17 @@
     <link rel="manifest" href="{% static 'site.webmanifest' %}">
 </head>
 <body>
+{% csrf_token %}
 <div class="container">
     <header>
-        <h1>😺CatTube</h1>
+        <h1><a class="logo" href="/">😺CatTube</a></h1>
         <p>Backblaze B2 Video Sharing Example</p>
+        <p>
+            <form action="search" method="get">
+                <input type="text" id="query" name="query" value="{{ query }}" placeholder="Search" />
+                <button type="submit">🔎</button>
+            </form>
+        </p>
         <hr>
     </header>
     <main>
@@ -28,20 +35,8 @@
                 <img src="{% static 'images/horizontal-red-navy.png' %}"/>
             </a>
             <span></span>
-            <a href="https://bunny.net/">
-                <img src="{% static 'images/bunny-net.png' %}"/>
-            </a>
-            <span></span>
-            <a href="https://www.vultr.com/">
-                <img src="{% static 'images/vultr-logo.png' %}"/>
-            </a>
-            <span></span>
-            <a href="https://transloadit.com/">
-                <img src="{% static 'images/logos-transloadit-default.png' %}"/>
-            </a>
-            <span></span>
-            <a href="https://uppy.io/">
-                <img src="{% static 'images/logos-uppy-default.png' %}"/>
+            <a href="https://www.twelvelabs.io/">
+                <img src="{% static 'images/twelve_labs.png' %}"/>
             </a>
         </div>
     </footer>
