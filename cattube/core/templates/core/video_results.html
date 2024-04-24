@@ -13,16 +13,20 @@
     <hr>
     <div id="grid">
         {% for result in object_list %}
-            <div class="video" data-video="{{ result.video.original }}">
+            <div class="video" data-video="{{ result.video.video }}">
                 <div class="thumbnail" data-status="">
-                    <a href="{% url 'watch' result.video.id %}">
-                        <img class="thumbnail" src="{{ result.video.thumbnail.url }}"><br>
-                    </a>
+                    <form id="form-id-{{ forloop.counter }}" action="{% url 'result' %}" method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="id" value="{{ result.video.id }}">
+                        <input type="hidden" name="clips" value="{{ result.clips }}">
+                        <input type="hidden" name="query" value="{{ query }}">
+                        <a onclick="document.querySelector('#form-id-{{ forloop.counter }}').submit();">
+                            <img class="thumbnail" src="{{ result.video.thumbnail.url }}"><br>
+                        </a>
+                    </form>
                 </div>
-                <b title="{{ result.video.original }}">{{ result.video.title }}</b><br>
-                {%  for clip in result.group.clips %}
-                    From {{ clip.start|floatformat:1 }} seconds to {{ clip.end|floatformat:1 }} seconds<br>
-                {% endfor %}
+                <b title="{{ result.video.video }}">{{ result.video.title }}</b><br>
+                {{ result.clip_count }} clip{% if result.clip_count > 1 %}s{% endif %}
             </div>
         {% empty %}
             <div>

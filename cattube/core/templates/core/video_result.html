@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load custom_tags %}
+
+{% block content %}
+    <a href="{% url 'home' %}">Home</a>
+    / <a href="{% url 'logout' %}">Log out</a>
+    <hr>
+    <div class="result-video">
+        <video width="640" height="360" controls>
+            <source src="{{ object.video.url }}" type="video/mp4">
+        </video>
+        <h2>{{ object.title }}</h2>
+        {{ video.user.username }}<br>
+        {{ video.uploaded_at }}
+    </div>
+    <div class="clips">
+        <h3>Search Results for "{{ query }}"</h3>
+        <i>Click to play:</i><br>
+        {% for clip in clips %}
+            <span onclick="playClip({{ clip.start }}, {{ clip.end }}); return false;">
+            {% if clip.confidence == 'high' %}
+                <b>
+            {% endif %}
+            {{ clip.start|hms }} - {{ clip.end|hms }}
+            {% if clip.confidence == 'high' %}
+                </b>
+            {% endif %}
+            ({{ clip.metadata|join_by_key:'type' }})
+            </span>
+            <br>
+        {% endfor %}
+        <h3>Transcription</h3>
+        <i>Click to play:</i><br>
+        {% for clip in transcription %}
+            <span onclick="playClip({{ clip.start }}, {{ clip.end }}); return false;">
+                {{ clip.start|hms }} - {{ clip.end|hms }}
+                "{{ clip.value }}"
+            </span>
+            <br>
+        {% endfor %}
+    </div>
+    <hr>
+    <form method="POST" action="{% url 'delete' object.id %}">
+        {% csrf_token %}
+        <button type="submit" onclick="return confirm('Are you sure do you want to delete \'{{object.title}}\'?')">
+            Delete Video
+        </button>
+    </form>
+    <script>
+    function playClip(start, end) {
+      const video = document.querySelector('video');
+      video.currentTime = start;
+      video.play();
+
+      savedListener = video.ontimeupdate;
+      video.ontimeupdate = (event) => {
+        if (video.currentTime > end) {
+          video.pause();
+          video.ontimeupdate = savedListener;
+        }
+      };
+    }
+    </script>
+{% endblock %}

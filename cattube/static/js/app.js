@@ -1,6 +1,8 @@
-function selectAll() {
+let selectedAll = false;
+
+function selectPage(state) {
   document.querySelectorAll("input[type=checkbox]").forEach(element => {
-    element.checked = true;
+    element.checked = state;
     element.dispatchEvent(new Event('click'))
   });
 }
@@ -25,13 +27,17 @@ function updateIndexUI(tasks) {
   let done = true;
   for (const task of tasks) {
     const divVideo = document.querySelector(`div[data-video="${task.video}"]`);
-    const divThumbnail = divVideo.querySelector('div.thumbnail');
-    if (task.status === 'Ready') {
-      divThumbnail.dataset.status = "";
-      divVideo.querySelector('input[type=checkbox]')?.remove();
-    } else {
-      divThumbnail.dataset.status = task.status;
-      done = false;
+    if (divVideo) {
+      const divThumbnail = divVideo.querySelector('div.thumbnail');
+      const imgThumbnail = divThumbnail.querySelector('img.thumbnail')
+      if (task.status === 'Ready') {
+        divThumbnail.dataset.status = "";
+        imgThumbnail.src = task.thumbnail;
+        divVideo.querySelector('input[type=checkbox]')?.remove();
+      } else {
+        divThumbnail.dataset.status = task.status;
+        done = false;
+      }
     }
   }
   return done;
@@ -39,7 +45,7 @@ function updateIndexUI(tasks) {
 
 function getVideoStatus(tasks, callback) {
   console.log("Getting status");
-  fetch('api/videos/get_status', {
+  fetch('api/videos/status', {
     method:'POST',
     headers:{
       'Content-Type': 'application/json',
@@ -66,47 +72,96 @@ function listenForStatusUpdates(tasks) {
   }, 1000);
 }
 
-function indexVideos(selected) {
-  fetch('api/videos/index_videos', {
+function videosOperation(data, operation, callback) {
+  fetch(`api/videos/${operation}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-CSRFToken': getToken('csrftoken'),
     },
-    body: JSON.stringify(selected)
+    body: JSON.stringify(data)
   }).then((response) => {
     console.log('status:', response.status);
     return response.json();
-  }).then((tasks) => {
-    console.log('tasks:', tasks);
-    listenForStatusUpdates(tasks);
+  }).then((data) => {
+    callback(data)
   });
 }
 
 function indexSelectedVideos() {
-  // Compile list of selected videos
-  const checked = document.querySelectorAll("input[type=checkbox]:checked");
-  const selected = [];
-  checked.forEach(element => {
-    const div = element.parentElement;
-    selected.push(div.dataset.video);
-    div.querySelector('div.thumbnail').dataset.status = 'Sending';
+  selectedVideosOperation('index', data => {
+      console.log('tasks:', data);
+      listenForStatusUpdates(data);
   });
-  console.log("selected:", selected);
+}
+
+function deleteSelectedVideos() {
+  selectedVideosOperation('delete', () => {
+      window.location.reload();
+  });
+}
+
+function selectedVideosOperation(operation, callback) {
+  const checked = document.querySelectorAll("input[type=checkbox]:checked");
+
+  let data;
+  if (selectedAll) {
+    data = { 'selectedAll' : true };
+    console.log("selected all");
+  } else {
+    // Compile list of selected videos
+    const selected = [];
+    checked.forEach(element => {
+      const divThumbnail = element.parentElement;
+      const divVideo = divThumbnail.parentElement;
+
+      selected.push(divVideo.dataset.video);
+      if (operation === 'index') {
+        divThumbnail.dataset.status = 'Sending';
+      }
+    });
+    console.log("selected:", selected);
+
+    data = { 'videos': selected };
+  }
 
   // Disable the checkboxes
   checked.forEach(element => element.disabled = true);
 
-  indexVideos(selected);
+  videosOperation(data, operation, callback);
 }
 
 function checkboxClicked() {
   const checked = document.querySelectorAll("input[type=checkbox]:checked");
+  const unchecked = document.querySelectorAll("input[type=checkbox]:not(:checked)");
+
   document.querySelector("#index").disabled = (checked.length === 0);
+  document.querySelector("#delete").disabled = (checked.length === 0);
+  document.querySelector("#unselect-page").disabled = (checked.length === 0);
+
+  selectionText = document.querySelector("#selection-text");
+  if (unchecked.length === 0) {
+    selectionText.innerHTML
+        = `${checked.length} videos on this page selected. <a href="#" id="select-all">Select all ${videoCount} videos.</a>`;
+    document.querySelector("#select-all").onclick = () => {
+      selectedAll = true;
+      document.querySelector("#selection-text").innerHTML =
+          `All ${videoCount} videos are selected. <a href="#" id="clear-select-all">Clear selection.</a>`;
+      document.querySelector("#clear-select-all").onclick = () => {
+        document.querySelector("#selection-text").innerHTML = '&nbsp;';
+        selectedAll = false;
+        selectPage(false);
+        return false;
+      }
+      return false;
+    }
+  } else {
+    selectionText.innerHTML = '&nbsp;';
+  }
 }
 
 window.onload = () => {
-  document.querySelector("#select-all").disabled = (document.querySelectorAll("input[type=checkbox]").length === 0);
+  document.querySelector("#select-page").disabled = (document.querySelectorAll("input[type=checkbox]").length === 0);
 
   const indexing = document.querySelectorAll('div.thumbnail:not([data-status=""]):not([data-status="Ready"])');
   if (indexing.length > 0) {

@@ -2,7 +2,7 @@ from django.apps import AppConfig
 from django.core.checks import register, Critical
 from twelvelabs import APIStatusError
 
-from cattube.settings import TL_CLIENT, TWELVE_LABS_INDEX_ID
+from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID
 
 
 # noinspection PyUnusedLocal
@@ -10,7 +10,7 @@ def check_tl_index_exists(app_configs, **kwargs):
     errors = []
 
     try:
-        index = TL_CLIENT.index.retrieve(TWELVE_LABS_INDEX_ID)
+        index = TWELVE_LABS_CLIENT.index.retrieve(TWELVE_LABS_INDEX_ID)
         print(f'Retrieved index "{str(index.__dict__)}"')
     except APIStatusError as e:
         errors.append(Critical('API Status Error from Twelve Labs', hint=str(e)))

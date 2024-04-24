@@ -75,10 +75,76 @@ div.thumbnail:after {
     z-index: 10;
 }
 
+/* Checkbox styling from https://moderncss.dev/pure-css-custom-checkbox-style/ */
+:root {
+    --form-control-color: dimgray;
+    --form-control-disabled: silver;
+}
+
+input[type="checkbox"] {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    appearance: none;
+    background-color: #fff;
+    margin: 0;
+    font: inherit;
+    color: var(--form-control-color);
+    width: 1.5em;
+    height: 1.5em;
+    border: 0.15em solid var(--form-control-color);
+    border-radius: 0.25em;
+    transform: translateY(-0.2em);
+    display: grid;
+    place-content: center;
+}
+
+input[type="checkbox"]::before {
+    content: "";
+    width: 0.85em;
+    height: 0.85em;
+    transform: scale(0);
+    transition: 120ms transform ease-in-out;
+    box-shadow: inset 1em 1em var(--form-control-color);
+    transform-origin: bottom left;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+input[type="checkbox"]:checked::before {
+    transform: scale(1);
+}
+
+input[type="checkbox"]:disabled {
+    --form-control-color: var(--form-control-disabled);
+
+    color: var(--form-control-disabled);
+    cursor: not-allowed;
+}
+
 img.thumbnail {
     border: 1px solid #c0c0c0;
+    width: 320px;
+    height: 180px;
 }
 
 div.buttonbar {
     margin-top: 10px;
+}
+
+div.selection {
+    margin-top: 10px;
+}
+
+div.clips {
+    margin-left: 660px;
+    line-height: 150%;
+}
+
+div.result-video {
+    float: left;
+    width: 640px;
+}
+
+div.video-metadata {
+    clear: both;
 }

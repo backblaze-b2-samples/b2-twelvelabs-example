@@ -1,44 +1,47 @@
-# Backblaze B2 + bunny.net + TransloadIt Video Sharing Example
+# Backblaze B2 + Twelve Labs Media Asset Management Example
 
-'CatTube' is a simple video sharing website comprising: 
+'CatTube' is a simple media asset management app comprising: 
 
 * A web app implemented with [Django](https://www.djangoproject.com) and JavaScript.
 * Video uploading with [Uppy](https://uppy.io) and processing at [TransloadIt](https://transloadit.com/).
 * Cloud object storage at [Backblaze B2](https://www.backblaze.com/b2/cloud-storage.html).
-* Content distribution via [bunny.net](bunny.net).
+* Video understanding by [Twelve Labs](https://www.twelvelabs.io/)
 
 ![CatTube index page](cattube.png)
 
 ## User Experience
 
+### Video Upload
+
 * Users upload videos from their browser to TransloadIt via the Uppy widget on the web app's 'Upload Video' page.
 
-* Once the video is uploaded, a JavaScript front end in the browser polls an API at the web app until the transcoded version is available.
+* Once the video is uploaded, a JavaScript front end in the browser polls an API at the web app, monitoring its status.
 
-* TransloadIt transforms the video file according to a preconfigured template and saves the following set of assets to a private bucket in Backblaze B2:
+* A Huey task polls TransloadIt until the upload is complete, when it updates the video's database record with the name of the uploaded file.
 
-  * The original video uploaded by the user
-  * An intermediate, resized version of the video
-  * The final resized, watermarked video for sharing
-  * A thumbnail image taken from the watermarked video
+* The next call from the JavaScript front end will return with the name of the uploaded video, signalling that the upload operation is complete. The browser shows the uploaded video, ready for viewing.
 
-* Once processing is complete, TransloadIt POSTs a JSON notification back to the web app containing full details of the 'assembly' process.
+### Indexing Videos
 
-* The web app updates the video's database record with the name of the transcoded file.
+* A user selects one or more videos in the web app, and hits the **Index** button.
 
-* The next call from the JavaScript front end will return with the name of the transcoded video, signalling that the transcoding operation is complete. The browser shows the transcoded video, ready for viewing.
+* The JavaScript front end sends the list of videos to an API in the web app.
+
+* The web app's index API starts a Huey task that creates a Twelve Labs index task for each video, then polls for the status of each video until all are ready.
+
+(more tbd)
 
 This webinar recording shows the website in action and explains how the pieces fit together:
 
-[![Scaling Media Delivery Workflows with bunny.net and Backblaze](https://img.youtube.com/vi/c8-0mr4W2Dw/maxresdefault.jpg)](https://www.youtube.com/watch?v=c8-0mr4W2Dw)
+[![Vision Meets Storage: AI-Driven Insights with Twelve Labs](https://cdn.brighttalk.com/ams/california/images/communication/611588/image_974178.png?width=640&height=360)](https://www.brighttalk.com/webcast/14807/611588)
 
 ## Prerequisites
 
 * An internet-accessible host
 * [Python 3.9.2](https://www.python.org/downloads/release/python-392/) (other Python versions _may_ work) and `pip`
 * A Backblaze account. [Sign up here](https://www.backblaze.com/b2/sign-up.html?referrer=nopref).
-* A bunny.net account. [Sign up here](https://panel.bunny.net/user/register/).
 * A TransloadIt account. [Sign up here](https://transloadit.com/c/signup/).
+* A Twelve Labs account. [Sign up here](https://playground.twelvelabs.io/).
 
 ## Backblaze B2
 
@@ -51,22 +54,6 @@ Click **App Keys** in the left nav menu, then **Add a New Application Key**. Nam
 Now click **Add a New Application Key** a second time and name the key `write-only-key-for-transloadit`. Select your bucket, **Write Only** and **Allow List All Bucket Names**, and click **Create New Key**. Again, make careful note of the key!
 
 Add a third Application Key, named `read-write-key-for-video-app`, with **Read and Write** access to the bucket you just created, and **Allow List All Bucket Names**. One more time, copy that key somewhere safe!
-
-## bunny.net
-
-Click **Pull Zones** in the navigation menu on the left, then **Add Pull Zone**. Give your Pull Zone a globally unique name, and set the **Origin URL** to `https://<your bucket name>.<your bucket endpoint>`. For example, if your bucket was called `example-movies` and the endpoint was `s3.us-west-004.backblazeb2.com`, the Origin URL would be `https://example-movies.s3.us-west-004.backblazeb2.com`. Scroll down and click **Add Pull Zone**.
-
-Click **Skip the Instructions**, then click **Caching** in the left nav menu. Scroll down and enable **Optimize for video delivery**. This setting configures bunny.net to cut up cached files and store them in 5MB chunks. This allows bunny.net to process byte range requests for uncached files allowing video skipping for uncached content and lower origin traffic.
-
-Now, in the left nav menu, click **Security**, then **S3 Authentication**. Click **Enable S3 Authentication** and paste in the read-only credentials you created in Backblaze: paste the Application Key ID into **AWS Key**, the Application Key into **AWS Secret**, and the region portion of your bucket's endpoint into **AWS Region Name**. Click **Save AWS Configuration**.
-
-Finally, click **Edge Rules** in the left nav bar, then **Add Edge Rule**. Leave the action set to **Block Request** and give the rule a suitable description, for example: "Allow requests to only the static, watermarked and thumbnail folders". Set **Condition Matching** to **Match None**, then click **Add Condition**. Leave the attribute set to **Request URL** and operation as **Match Any**, and add three trigger values:
-
-* `https://<your pull zone hostname>/thumbnail/*`
-* `https://<your pull zone hostname>/watermarked/*`
-* `https://<your pull zone hostname>/static/*`
-
-Click **Save Edge Rule**. Now, bunny.net will disallow requests to URLs outside the permitted list, such as `https://<your pull zone hostname>/resized/*`.
 
 ## TransloadIt
 

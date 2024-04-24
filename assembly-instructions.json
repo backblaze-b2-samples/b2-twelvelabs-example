@@ -3,26 +3,13 @@
     ":original": {
       "robot": "/upload/handle"
     },
-    "thumbnail": {
-      "use": ":original",
-      "robot": "/video/thumbs",
-      "count": 1,
-      "offsets": [
-        "10%"
-      ],
-      "width": 320,
-      "height": 320,
-      "resize_strategy": "fit",
-      "ffmpeg_stack": "v6.0.0"
-    },
     "exported": {
       "use": [
-        ":original",
-        "thumbnail"
+        ":original"
       ],
       "robot": "/backblaze/store",
       "credentials": "metadaddy-twelvelabs",
-      "path": "${previous_step.name}/${assembly.id}/${file.name}"
+      "path": "videos/${file.name}"
     }
   }
 }

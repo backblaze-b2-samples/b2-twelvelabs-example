@@ -13,7 +13,7 @@
     <hr>
     <div id="grid">
         {% for video in object_list %}
-            <div class="video" data-video="{{ video.original }}">
+            <div class="video" data-video="{{ video.video }}">
                 {% if video.status == "Ready" %}
                     <div class="thumbnail" data-status="">
                 {% else %}
@@ -23,14 +23,14 @@
                             {% if video.thumbnail %}
                                 <img class="thumbnail" src="{{ video.thumbnail.url }}"><br>
                             {% else %}
-                                <img class="thumbnail" src="{% static 'images/processing.png' %}"><br>
+                                <img class="thumbnail" src="{% static 'images/whitenoise320x180.png' %}"><br>
                             {% endif %}
                         </a>
+                        {% if video.status == "" %}
+                            <input type="checkbox" onclick="checkboxClicked(this)"/>
+                        {% endif %}
                     </div>
-                {% if video.status == "" %}
-                    <input type="checkbox" onclick="checkboxClicked(this)"/>
-                {% endif %}
-                <b title="{{ video.original }}">{{ video.title }}</b><br>
+                <b title="{{ video.video }}">{{ video.title }}</b><br>
                 {{ video.user.username }}<br>
                 {{ video.uploaded_at }}
             </div>
@@ -54,6 +54,7 @@
 
             <span class="current">
                 Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+                Showing {{ page_obj.paginator.per_page }} of {{ page_obj.paginator.object_list|length }} videos.
             </span>
 
             {% if page_obj.has_next %}
@@ -64,9 +65,22 @@
     </div>
     {% if user.is_authenticated %}
         <div class="buttonbar">
-            <button id="select-all" type="button" onclick="selectAll()" disabled>Select All</button>
-            <button id="index" type="button" onclick="indexSelectedVideos()" disabled>Index</button>
+            <form method="POST" onsubmit="deleteSelectedVideos(); return false;">
+                {% csrf_token %}
+                <button id="select-page" type="button" onclick="selectPage(true)" disabled>Select All</button>
+                <button id="unselect-page" type="button" onclick="selectPage(false)" disabled>Unselect All</button>
+                <button id="delete" type="submit" onclick="return confirm('Are you sure do you want to delete the selected video(s)?')" disabled>
+                    Delete
+                </button>
+                <button id="index" type="button" onclick="indexSelectedVideos()" disabled>Index</button>
+            </form>
         </div>
     {% endif %}
+    <div class="selection">
+        <span id="selection-text">&nbsp;</span>
+    </div>
+    <script>
+        const videoCount = {{ page_obj.paginator.object_list|length }};
+    </script>
     <script src="{% static 'js/app.js' %}"></script>
 {% endblock %}

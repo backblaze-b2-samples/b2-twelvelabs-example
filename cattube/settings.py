@@ -155,10 +155,13 @@ HUEY = {
     'immediate': False,
 }
 
-VIDEOS_PATH = ':original'
+VIDEOS_PATH = 'video'
 THUMBNAILS_PATH = 'thumbnail'
+TRANSCRIPTS_PATH = 'transcription'
+TEXT_PATH = 'text_in_video'
+LOGOS_PATH = 'logo'
 
 TWELVE_LABS_INDEX_ID = os.environ['TWELVE_LABS_INDEX_ID']
 TWELVE_LABS_POLL_INTERVAL = 1
 
-TL_CLIENT = TwelveLabs(api_key=os.environ['TWELVE_LABS_API_KEY'])
+TWELVE_LABS_CLIENT = TwelveLabs(api_key=os.environ['TWELVE_LABS_API_KEY'])
