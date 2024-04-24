@@ -7,8 +7,6 @@
 * Cloud object storage at [Backblaze B2](https://www.backblaze.com/b2/cloud-storage.html).
 * Video understanding by [Twelve Labs](https://www.twelvelabs.io/)
 
-![CatTube index page](cattube.png)
-
 ## User Experience
 
 ### Video Upload
