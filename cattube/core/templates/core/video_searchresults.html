@@ -1,0 +1,16 @@
+{% load custom_tags %}
+<h3>Search Results for "{{ query }}"</h3>
+<i>Click to play:</i><br>
+{% for clip in clips %}
+    <span onclick="playClip({{ clip.start }}, {{ clip.end }}); return false;">
+        {% if clip.confidence == 'high' %}
+            <b>
+        {% endif %}
+        {{ clip.start|hms }} - {{ clip.end|hms }}
+        {% if clip.confidence == 'high' %}
+            </b>
+        {% endif %}
+        ({{ clip.metadata|join_by_key:'type' }})
+    </span>
+    <br>
+{% endfor %}

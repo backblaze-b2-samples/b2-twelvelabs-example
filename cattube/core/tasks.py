@@ -34,8 +34,8 @@ def do_video_indexing(video_tasks):
     print(f'Polling Twelve Labs for {video_tasks}')
 
     # Do a single database query for all the videos we're interested in
-    video_names = [video_task['video'] for video_task in video_tasks]
-    videos = Video.objects.filter(video__in=video_names)
+    video_ids = [video_task['id'] for video_task in video_tasks]
+    videos = Video.objects.filter(id__in=video_ids)
 
     while True:
         done = True

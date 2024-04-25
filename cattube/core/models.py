@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from django.contrib.auth.models import User
+from django.core.files.storage import default_storage
 from django.db import models
 from django.utils import timezone
 
@@ -8,14 +11,16 @@ from pydantic import RootModel
 from typing import List
 from twelvelabs.models import VideoValue, SearchData
 
+
 class Video(models.Model):
     title = models.CharField(max_length=256)
+    assembly_id = models.CharField(max_length=256, default='')
     uploaded_at = models.DateTimeField(default=timezone.now)
-    video = models.FileField()
-    thumbnail = models.FileField()
-    transcription = models.FileField()
-    text_in_video = models.FileField()
-    logo = models.FileField()
+    video = models.FileField(null=True)
+    thumbnail = models.FileField(null=True)
+    transcription = models.FileField(null=True)
+    text_in_video = models.FileField(null=True)
+    logo = models.FileField(null=True)
     status = models.CharField(max_length=16, default='')
     video_id = models.CharField(max_length=32, default='')
     user = models.ForeignKey(User, related_name='videos', on_delete=models.CASCADE)
@@ -50,13 +55,14 @@ class SearchResult(models.Model):
     managed = False
 
     video = models.ForeignKey("Video", on_delete=models.DO_NOTHING)
-    clip_count = models.IntegerField()
-    clips = models.CharField(max_length=10240)
+    clip_count = models.IntegerField(default=0)
+    clips = models.CharField(max_length=10240, default='')
 
 
 class VideoValueList(RootModel):
     """
     Wrapper so we can easily serialize lists of VideoValue objects back to JSON
+    TBD - move to twelvelabs-python
     """
     root: List[VideoValue]
 
@@ -64,5 +70,26 @@ class VideoValueList(RootModel):
 class SearchDataList(RootModel):
     """
     Wrapper so we can easily serialize lists of SearchData objects back to JSON
+    TBD - move to twelvelabs-python
     """
     root: List[SearchData]
+
+
+def add_new_files(user):
+    """
+    Helper function to list files in the default storage, adding them to the database if they do not already exist.
+    """
+    if user.is_authenticated:
+        directories, files = default_storage.listdir(f'{VIDEOS_PATH}')
+        videos = Video.objects.all()
+        new_videos = []
+        for file in files:
+            path_to_file = url_path_join(VIDEOS_PATH, file)
+            if len(videos.filter(video__exact=path_to_file)) == 0:
+                new_videos.append(Video(
+                    video=path_to_file,
+                    title=Path(file).stem,
+                    user=user,
+                    uploaded_at=default_storage.get_modified_time(path_to_file)))
+        if len(new_videos) > 0:
+            Video.objects.bulk_create(new_videos)

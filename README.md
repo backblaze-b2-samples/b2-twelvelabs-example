@@ -9,7 +9,7 @@
 
 ## User Experience
 
-### Video Upload
+### Uploading Videos
 
 * Users upload videos from their browser to TransloadIt via the Uppy widget on the web app's 'Upload Video' page.
 
@@ -27,7 +27,13 @@
 
 * The web app's index API starts a Huey task that creates a Twelve Labs index task for each video, then polls for the status of each video until all are ready.
 
-(more tbd)
+* As each video reaches the ready state, the Huey task copies the thumbnail, transcript and other data to Backblaze B2.
+
+* Once a video is indexed, its thumbnail is displayed in the main list of videos, and its transcript etc are shown on its detail page.
+
+### Searching Videos
+
+* Users can search on natural language queries such as "cats playing on floor"
 
 This webinar recording shows the website in action and explains how the pieces fit together:
 
@@ -43,15 +49,13 @@ This webinar recording shows the website in action and explains how the pieces f
 
 ## Backblaze B2
 
-Click **Buckets** in the navigation menu on the left, then **Create a Bucket**. Give the bucket a name (you may need more than one try, the bucket name must be globally unique!), leave the remaining settings, and click **Create a Bucket**. Make a note of the **Endpoint** shown in the bucket details; it's a domain name of the form `s3.us-west-004.backblazeb2.com`. Make a note also of the region portion of the endpoint; this is the string following `s3.` and preceding `.backblazeb2.com`. In the example above, it's `us-west-004`, but yours may be different.
+Click **Buckets** in the navigation menu on the left, then **Create a Bucket**. Give the bucket a name (you may need more than one try, the bucket name must be globally unique!), leave the remaining settings, and click **Create a Bucket**. Make a note of the **Endpoint** shown in the bucket details; it's a domain name of the form `s3.us-west-004.backblazeb2.com`. Make a note also of the region portion of the endpoint; this is the string following `s3.` and preceding `.backblazeb2.com`. In the example above, it's `us-west-004`, but yours may be different. You can use the same bucket for static assets, such as the web app's CSS and JavaScript files, and your videos, or create a bucket for each purpose.  
 
-You'll be creating three Application Keys–one each for bunny.net, TransloadIt and the web application. Why three keys? The three B2 clients need different levels of access: bunny.net only needs to read files to cache and deliver them; TransloadIt only needs to write raw and processed files; the web app needs read/write access, but only to files with the `static/` prefix - Django's `collectstatic` command uploads new and updated assets such as CSS files and images with this prefix. 
+You'll be creating two Application Keys–one each for TransloadIt and the web application. Why two keys? The two B2 clients need different levels of access: TransloadIt only needs to write raw and processed files; the web app needs read/write access. 
 
-Click **App Keys** in the left nav menu, then **Add a New Application Key**. Name the key `read-only-key-for-bunny`, select the bucket you just created, select **Read Only** and **Allow List All Bucket Names**, and click **Create New Key**. Make careful note of the key - you will not be able to retrieve it after navigating away from the page!
+Click **App Keys** in the left nav menu, then **Add a New Application Key**. Name the key `write-only-key-for-transloadit`. Select your bucket, **Write Only** and **Allow List All Bucket Names**, and click **Create New Key**. Again, make careful note of the key!
 
-Now click **Add a New Application Key** a second time and name the key `write-only-key-for-transloadit`. Select your bucket, **Write Only** and **Allow List All Bucket Names**, and click **Create New Key**. Again, make careful note of the key!
-
-Add a third Application Key, named `read-write-key-for-video-app`, with **Read and Write** access to the bucket you just created, and **Allow List All Bucket Names**. One more time, copy that key somewhere safe!
+Add a second Application Key, named `read-write-key-for-video-app`, with **Read and Write** access to the bucket you just created, and **Allow List All Bucket Names**. One more time, copy that key somewhere safe!
 
 ## TransloadIt
 
@@ -59,9 +63,17 @@ You can create a new App, or use an existing one, as you see fit.
 
 Click **Credentials** in the navigation menu on the left, then, under **Third-party Credentials** click **Add new Credential**. Select **Backblaze** as the service, name the key `backblaze-write-only`, and paste in the Backblaze B2 Bucket name, Application Key ID and Application Key. Click **Save**.
 
-Now click **Templates** in the left nav menu, then **New Template**. Click **Blank** to create an empty template. Give the template a suitable name and paste in the [assembly instructions](assembly-instructions.json). Feel free to replace the `watermark_url` and otherwise customize the template! Click **Create Template** and copy the template id displayed at the top of the page.
+Now click **Templates** in the left nav menu, then **New Template**. Click **Blank** to create an empty template. Give the template a suitable name and paste in the [assembly instructions](assembly-instructions.json). Click **Create Template** and copy the template id displayed at the top of the page.
 
 Finally, to secure access to your template, click **Settings** in the left nav menu and, under **API Settings**, enable **Require a correct Signature**. The web application contains code to generate a unique signature for each file upload.
+
+## Twelve Labs
+
+Twelve Labs creates a default video index when you sign up. Log in to Twelve Labs and:
+
+* Create an API key in the [Twelve Labs dashboard](https://dashboard.twelvelabs.io/home).
+
+* Click the default index in the [Playground index list](https://playground.twelvelabs.io/indexes) and make a note of the URL. The index ID is the segment of the URL after the last `/`. For example, in the URL `https://playground.twelvelabs.io/indexes/65bad3966dc02a0c60049448`, the index ID is `65bad3966dc02a0c60049448`
 
 ## Web Application
 
@@ -80,18 +92,28 @@ pip install -r requirements.txt
 Copy `.env.template` to `.env`, or set environment variables with your configuration:
 
 ```bash
-AWS_ACCESS_KEY_ID = "<Your Backblaze Application Key ID>"
-AWS_SECRET_ACCESS_KEY = "<Your Backblaze Application Key>"
-AWS_STORAGE_BUCKET_NAME = "<Your Backblaze Bucket>"
-AWS_S3_REGION_NAME = "<Your Backblaze endpoint region, e.g. us-west-004>"
+# Settings for bucket containing videos, thumbnails etc
+DEFAULT_ACCESS_KEY_ID="<Backblaze Application Key ID>"
+DEFAULT_SECRET_ACCESS_KEY="<Backblaze Application Key>"
+DEFAULT_S3_REGION_NAME="<Backblaze endpoint region, e.g. us-west-004>"
+DEFAULT_STORAGE_BUCKET_NAME="<Backblaze bucket name>"
+DEFAULT_STORAGE_LOCATION="<Path to files within bucket>"
 
-BUNNY_PULL_ZONE_DOMAIN = "<Your bunny.net Pull Zone domain, e.g. example-movies.b-cdn.net>"
+# Settings for bucket containing static assets
+STATIC_ACCESS_KEY_ID="<Backblaze Application Key ID>"
+STATIC_SECRET_ACCESS_KEY="<Backblaze Application Key>"
+STATIC_S3_REGION_NAME="<Backblaze endpoint region, e.g. us-west-004>"
+STATIC_STORAGE_BUCKET_NAME="<Backblaze bucket name>"
+STATIC_STORAGE_LOCATION="<Path to files within bucket>"
 
-TRANSLOADIT_KEY = "<Your TransloadIt Auth Key>"
-TRANSLOADIT_SECRET = "<Your TransloadIt Auth Secret>"
-TRANSLOADIT_TEMPLATE_ID = "<Your TransloadIt Template ID>"
+TRANSLOADIT_KEY="<Transloadit auth key>"
+TRANSLOADIT_SECRET="<Transloadit auth secret>"
+TRANSLOADIT_TEMPLATE_ID="<Transloadit template ID>"
 
-WEB_APPLICATION_HOST = "<Your web application's domain, e.g. movies.example.com>"
+TWELVE_LABS_API_KEY="<Twelve Labs API Key>"
+TWELVE_LABS_INDEX_ID="<Twelve Labs Index ID>"
+
+WEB_APPLICATION_HOST='<Hostname of the app>'
 ```
 
 Run the usual commands to initialize a Django application:

@@ -7,6 +7,9 @@ from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID
 
 # noinspection PyUnusedLocal
 def check_tl_index_exists(app_configs, **kwargs):
+    """
+    Get the index from Twelve Labs to validate the API key and index ID.
+    """
     errors = []
 
     try:

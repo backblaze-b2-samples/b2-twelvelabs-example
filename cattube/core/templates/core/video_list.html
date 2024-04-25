@@ -13,7 +13,7 @@
     <hr>
     <div id="grid">
         {% for video in object_list %}
-            <div class="video" data-video="{{ video.video }}">
+            <div class="video" data-videoid="{{ video.id }}">
                 {% if video.status == "Ready" %}
                     <div class="thumbnail" data-status="">
                 {% else %}
@@ -26,9 +26,7 @@
                                 <img class="thumbnail" src="{% static 'images/whitenoise320x180.png' %}"><br>
                             {% endif %}
                         </a>
-                        {% if video.status == "" %}
-                            <input type="checkbox" onclick="checkboxClicked(this)"/>
-                        {% endif %}
+                        <input type="checkbox" onclick="checkboxClicked({{ page_obj.paginator.object_list|length }})"/>
                     </div>
                 <b title="{{ video.video }}">{{ video.title }}</b><br>
                 {{ video.user.username }}<br>
@@ -80,7 +78,14 @@
         <span id="selection-text">&nbsp;</span>
     </div>
     <script>
-        const videoCount = {{ page_obj.paginator.object_list|length }};
+        window.onload = () => {
+          document.querySelector("#select-page").disabled = (document.querySelectorAll("input[type=checkbox]").length === 0);
+
+          const indexing = document.querySelectorAll('div.thumbnail:not([data-status=""]):not([data-status="Ready"])');
+          if (indexing.length > 0) {
+            const tasks = Array.from(indexing, thumbnail => { return { id: thumbnail.parentElement.dataset.videoid} })
+            listenForStatusUpdates(tasks);
+          }
+        };
     </script>
-    <script src="{% static 'js/app.js' %}"></script>
 {% endblock %}

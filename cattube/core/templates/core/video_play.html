@@ -1,0 +1,8 @@
+<div class="result-video">
+    <video width="640" height="360" controls>
+        <source src="{{ object.video.url }}" type="video/mp4">
+    </video>
+    <h2>{{ object.title }}</h2>
+    {{ video.user.username }}<br>
+    {{ video.uploaded_at }}
+</div>

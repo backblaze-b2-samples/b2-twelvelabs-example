@@ -6,7 +6,7 @@ from .models import Notification, Video
 class VideoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Video
-        fields = ['title', 'uploaded_at', 'original', 'thumbnail', 'user']
+        fields = ['title', 'uploaded_at', 'video', 'user']
 
 
 class NotificationSerializer(serializers.ModelSerializer):

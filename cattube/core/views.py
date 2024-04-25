@@ -1,46 +1,25 @@
-import hashlib
-import hmac
 import json
-from datetime import datetime, timedelta
-from pathlib import Path
 
-from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
 from django.shortcuts import render
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
-from django.utils.safestring import mark_safe
 from django.views.generic.base import View
 from django.views.generic.detail import DetailView, SingleObjectTemplateResponseMixin, SingleObjectMixin
 from django.views.generic.edit import CreateView
 from django.views.generic.edit import DeleteView
 from django.views.generic.list import ListView
 
-from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID, POLL_TRANSLOADIT, VIDEOS_PATH, TRANSCRIPTS_PATH
+from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID, POLL_TRANSLOADIT, TRANSCRIPTS_PATH, TEXT_PATH, \
+    LOGOS_PATH
 from .forms import ResultForm
-from .models import Video, SearchResult, SearchDataList
+from .models import Video, SearchResult, SearchDataList, add_new_files
 from .tasks import poll_video_loading
-from .utils import url_path_join
+from .utils import load_json_into_context, create_signed_transloadit_options
 
 PAGE_SIZE = 12
-
-
-def add_new_files(view):
-    if view.request.user.is_authenticated:
-        directories, files = default_storage.listdir(f'{VIDEOS_PATH}')
-        videos = Video.objects.all()
-        new_videos = []
-        for file in files:
-            path_to_file = url_path_join(VIDEOS_PATH, file)
-            if len(videos.filter(video__exact=path_to_file)) == 0:
-                new_videos.append(Video(
-                    video=path_to_file,
-                    title=Path(file).stem,
-                    user=view.request.user,
-                    uploaded_at=default_storage.get_modified_time(path_to_file)))
-        if len(new_videos) > 0:
-            Video.objects.bulk_create(new_videos)
 
 
 class VideoListView(ListView):
@@ -49,7 +28,10 @@ class VideoListView(ListView):
     ordering = ['-uploaded_at']
 
     def get_queryset(self):
-        add_new_files(self)
+        """
+        Override default, so we can update the database with any new files in B2.
+        """
+        add_new_files(self.request.user)
         return super().get_queryset()
 
 
@@ -59,9 +41,11 @@ class VideoSearchView(ListView):
     template_name = "core/video_results.html"
 
     def get_queryset(self):
+        """
+        Search Twelve Labs for videos matching the query
+        """
         query = self.request.GET.get("query", None)
 
-        # Search indexed videos for the query string
         result = TWELVE_LABS_CLIENT.search.query(
             TWELVE_LABS_INDEX_ID,
             query,
@@ -79,9 +63,10 @@ class VideoSearchView(ListView):
             # Do a database query to get the videos for each page of results
             video_ids = [group.id for group in search_data]
             videos = Video.objects.filter(video_id__in=video_ids)
-            search_results += [SearchResult(video=videos.get(video_id__exact=group.id),
-                                            clip_count=len(group.clips),
-                                            clips=SearchDataList(root=group.clips).model_dump_json()) for group in search_data]
+            for group in search_data:
+                search_results.append(SearchResult(video=videos.get(video_id__exact=group.id),
+                                                   clip_count=len(group.clips),
+                                                   clips=SearchDataList(root=group.clips).model_dump_json()))
 
             # Is there another page?
             try:
@@ -99,12 +84,44 @@ class VideoSearchView(ListView):
         return context
 
 
-def load_json(object, type):
-    object.transcription.open(mode="rb")
-    data = getattr(object, type).read()
-    object.transcription.close()
+class VideoResultView(SingleObjectTemplateResponseMixin, SingleObjectMixin, View):
+    """
+    Drill down into a single search result. Parameters are POSTed to this page, since
+    they include the search results for this video.
+    """
+    model = Video
+    template_name = "core/video_result.html"
+    pk_url_kwarg = 'id'
 
-    return json.loads(data)
+    def get_object(self, queryset=None):
+        """
+        Get the object from the "id" form parameter, referenced here as "pk"
+        """
+        if queryset is None:
+            queryset = self.get_queryset()
+        return queryset.get(pk=self.pk)
+
+    # noinspection PyAttributeOutsideInit
+    def post(self, request):
+        """
+        Handle the POST, using a Form to extract the parameters, and populate the context with the search
+        results (clips), query, and all the video data.
+        """
+        form = ResultForm(request.POST)
+        if not form.is_valid():
+            raise ValidationError("Invalid form", code="invalid")
+
+        self.pk = form.cleaned_data['id']
+        self.object = self.get_object()
+
+        context = self.get_context_data(object=self.object)
+        context['clips'] = json.loads(form.cleaned_data['clips'])
+        context['query'] = form.cleaned_data['query']
+        # TBD - load JSON into the page
+        load_json_into_context(context, [TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH], self.object)
+
+        return render(request, self.template_name, context)
+
 
 class VideoDetailView(DetailView):
     model = Video
@@ -112,52 +129,42 @@ class VideoDetailView(DetailView):
     slug_url_kwarg = 'video_id'
 
     def get_context_data(self, **kwargs):
+        """
+        Load all the video data from B2 into the context
+        """
         context = super().get_context_data(**kwargs)
-        context['transcription'] = load_json(self.object, TRANSCRIPTS_PATH)
+        load_json_into_context(context, [TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH], self.object)
         return context
+
 
 @method_decorator(login_required, name='dispatch')
 class VideoCreateView(CreateView):
     model = Video
-    fields = ['title', 'assembly_id', ]
+    fields = ['title', 'assembly_id']
 
     def get_success_url(self):
+        """
+        Go to video detail page on success
+        """
         return reverse_lazy('watch', kwargs={'video_id': self.object.id})
 
     def get_context_data(self, **kwargs):
-        # Signature calculation from
-        # https://transloadit.com/docs/topics/signature-authentication/#signature-python-sdk-demo
-        expires = (timedelta(seconds=60 * 60) + datetime.utcnow()).strftime("%Y/%m/%d %H:%M:%S+00:00")
-        params = {
-            'auth': {
-                'key': settings.TRANSLOADIT_KEY,
-                'expires': expires,
-            },
-            'template_id': settings.TRANSLOADIT_TEMPLATE_ID,
-        }
-
-        if not POLL_TRANSLOADIT:
-            params['notify_url'] = self.request.build_absolute_uri(reverse('notification'))
-
-        message = json.dumps(params, separators=(',', ':'), ensure_ascii=False)
-        signature = hmac.new(settings.TRANSLOADIT_SECRET.encode('utf-8'),
-                             message.encode('utf-8'),
-                             hashlib.sha384).hexdigest()
-
+        """
+        Add the TransloadIt params and signature to the context
+        """
         context = super().get_context_data(**kwargs)
-        # Need to mark message as safe so Django doesn't escape the JSON
-        context['params'] = mark_safe(message)
-        context['signature'] = 'sha384:' + signature
+        notify_url = None if POLL_TRANSLOADIT else self.request.build_absolute_uri(reverse('notification'))
+        context.update(create_signed_transloadit_options(notify_url))
         return context
 
     # noinspection PyAttributeOutsideInit
     def form_valid(self, form):
-        self.object = form.save(commit=False)
-        self.object.user = self.request.user
-        self.object.save()
+        form.instance.user = self.request.user
+        # Save the new object to the database before kicking off the polling task to avoid race conditions
+        response = super().form_valid(form)
         if POLL_TRANSLOADIT:
             poll_video_loading(form.data['assembly_id'])
-        return super().form_valid(form)
+        return response
 
 
 @method_decorator(login_required, name='dispatch')
@@ -167,40 +174,14 @@ class VideoDeleteView(DeleteView):
     slug_url_kwarg = 'video_id'
 
     def form_valid(self, form):
-        video = self.get_object().video
-        print(f'Deleting: {video}')
-        default_storage.delete(video.name)
-        print(f'Deleted: {video}')
+        """
+        Delete the file from B2 as well as the object from the database
+        """
+        video_name = self.get_object().video.name
+        print(f'Deleting: {video_name}')
+        default_storage.delete(video_name)
+        print(f'Deleted: {video_name}')
         return super().form_valid(form)
 
     def get_success_url(self):
         return reverse('home')
-
-
-class VideoResultView(SingleObjectTemplateResponseMixin, SingleObjectMixin, View):
-    model = Video
-    template_name = "core/video_result.html"
-    pk_url_kwarg = 'id'
-
-    def get_object(self, queryset=None):
-        if queryset is None:
-            queryset = self.get_queryset()
-        return queryset.get(pk=self.pk)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['clips'] = json.loads(self.request.POST.get('clips', None))
-        context['query'] = self.request.POST.get('query', None)
-        context['transcription'] = load_json(self.object, TRANSCRIPTS_PATH)
-        return context
-
-    def post(self, request):
-        form = ResultForm(request.POST)
-        if form.is_valid():
-            self.pk = form.cleaned_data['id']
-            self.object = self.get_object()
-            context = self.get_context_data(object=self.object)
-        else:
-            # TBD
-            print('INVALID')
-        return render(request, self.template_name, context)

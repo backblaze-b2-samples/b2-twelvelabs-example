@@ -26,7 +26,7 @@ function getToken(name) {
 function updateIndexUI(tasks) {
   let done = true;
   for (const task of tasks) {
-    const divVideo = document.querySelector(`div[data-video="${task.video}"]`);
+    const divVideo = document.querySelector(`div[data-videoid="${task.id}"]`);
     if (divVideo) {
       const divThumbnail = divVideo.querySelector('div.thumbnail');
       const imgThumbnail = divThumbnail.querySelector('img.thumbnail')
@@ -115,7 +115,7 @@ function selectedVideosOperation(operation, callback) {
       const divThumbnail = element.parentElement;
       const divVideo = divThumbnail.parentElement;
 
-      selected.push(divVideo.dataset.video);
+      selected.push(divVideo.dataset.videoid);
       if (operation === 'index') {
         divThumbnail.dataset.status = 'Sending';
       }
@@ -131,7 +131,7 @@ function selectedVideosOperation(operation, callback) {
   videosOperation(data, operation, callback);
 }
 
-function checkboxClicked() {
+function checkboxClicked(videoCount) {
   const checked = document.querySelectorAll("input[type=checkbox]:checked");
   const unchecked = document.querySelectorAll("input[type=checkbox]:not(:checked)");
 
@@ -160,12 +160,30 @@ function checkboxClicked() {
   }
 }
 
-window.onload = () => {
-  document.querySelector("#select-page").disabled = (document.querySelectorAll("input[type=checkbox]").length === 0);
+function playClip(start, end) {
+  const video = document.querySelector('video');
+  video.currentTime = start;
+  video.play();
 
-  const indexing = document.querySelectorAll('div.thumbnail:not([data-status=""]):not([data-status="Ready"])');
-  if (indexing.length > 0) {
-    const tasks = Array.from(indexing, thumbnail => { return { video: thumbnail.parentElement.dataset.video} })
-    listenForStatusUpdates(tasks);
+  savedListener = video.ontimeupdate;
+  video.ontimeupdate = (event) => {
+    if (video.currentTime > end) {
+      video.pause();
+      video.ontimeupdate = savedListener;
+    }
+  };
+}
+
+async function pollForVideo(id) {
+  console.log(`Polling for ${id}`)
+  const response = await fetch(`/api/videos/${id}`)
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        }
+      });
+
+  if (response?.video) {
+    location.reload();
   }
-};
+}

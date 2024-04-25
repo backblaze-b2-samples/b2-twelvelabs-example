@@ -1,20 +1,23 @@
-import hmac
 import json
+import traceback
 
 from django.core.files.storage import default_storage
 from django.shortcuts import get_object_or_404
 from django.views.decorators.cache import never_cache
+from httpx import HTTPStatusError
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import api_view, parser_classes, authentication_classes, permission_classes
 from rest_framework.parsers import FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from twelvelabs import NotFoundError
 
 from cattube.core.models import Video
 from cattube.core.serializers import VideoSerializer, NotificationSerializer
 from cattube.core.tasks import do_video_indexing
-from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID, TRANSLOADIT_SECRET
+from cattube.core.utils import verify_transloadit_signature
+from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID
 
 
 @api_view(['POST'])
@@ -23,43 +26,98 @@ from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID, TRANSLOAD
 def index_videos(request):
     print(f'Indexing videos: {request.data}')
 
-    videos = Video.objects.all() if request.data.get('selectedAll') else Video.objects.filter(video__in=request.data.videos);
+    if request.data.get('selectedAll'):
+        videos = Video.objects.all()
+    else:
+        videos = Video.objects.filter(id__in=request.data['videos'])
+
+    # Don't index videos that have already been submitted for indexing
+    videos = videos.filter(status__in=['', 'Sending'])
 
     # Update status in database so that UI can get it
-    video_tasks = []
+    video_dicts = []
     for video in videos:
         video.status = 'Sending'
-        video_tasks.append({
+        video_dicts.append({
+            'id': video.id,
             'video': video.video.name,
             'status': 'Sending'
         })
     Video.objects.bulk_update(videos, ['status'])
 
     # Start a Huey task to create indexing tasks and poll Twelve Labs for status
-    do_video_indexing(video_tasks)
+    do_video_indexing(video_dicts)
 
-    return Response(video_tasks)
+    return Response(video_dicts)
 
 
 @api_view(['POST'])
 @authentication_classes([SessionAuthentication])
 @permission_classes([IsAuthenticated])
 def delete_videos(request):
+    """
+    Delete videos with ids listed in request.data. We try deleting from the B2 storage first, then from the Twelve Labs
+    index, then from the database. At each step, we don't care if it's already been deleted.
+    """
     print(f'Deleting videos: {request.data}')
 
-    videos = Video.objects.all() if request.data.get('selectedAll') else Video.objects.filter(video__in=request.data.videos);
+    if request.data.get('selectedAll'):
+        videos = Video.objects.all()
+    else:
+        videos = Video.objects.filter(id__in=request.data['videos'])
 
-    deleted_video_ids = []
+    # Try deleting from B2 first
+    deleted_from_storage = []
+    file_fields = ['video', 'thumbnail', 'transcription', 'text_in_video', 'logo']
     for video in videos:
-        try:
-            default_storage.delete(video.video)
-            deleted_video_ids.append(video.video_id)
-        except:
-            print(f'Cannot delete {video.video}')
-    Video.objects.filter(video_id__in=deleted_video_ids).delete()
-    print(f'Deleted videos: {deleted_video_ids}')
+        deletion_failed = False
+        for attr in file_fields:
+            name = getattr(video, attr).name
+            if name:
+                try:
+                    default_storage.delete(name)
+                    setattr(video, attr, None)
+                except Exception as err:
+                    print(f'Cannot delete {name} from storage: {err}')
+                    traceback.print_exception(type(err), err, err.__traceback__)
+                    deletion_failed = True
+        if not deletion_failed:
+            deleted_from_storage.append(video)
 
-    return Response(deleted_video_ids)
+    print(f'Deleted from storage: {deleted_from_storage}')
+    Video.objects.bulk_update(deleted_from_storage, ['video'])
+
+    # Now delete from Twelve Labs
+    deleted_from_index = []
+    file_fields = ['thumbnail', 'transcription', 'text_in_video', 'logo']
+    for video in deleted_from_storage:
+        try:
+            try:
+                TWELVE_LABS_CLIENT.index.video.delete(TWELVE_LABS_INDEX_ID, video.video_id)
+                video.video_id = ''
+                for attr in file_fields:
+                    setattr(video, attr, None)
+            except NotFoundError:
+                print(f'{video.video_id} not found in index. Carrying on anyway.')
+
+            deleted_from_index.append(video)
+        except Exception as err:
+            print(f'Cannot delete {video.video_id} from index: {err}')
+            traceback.print_exception(type(err), err, err.__traceback__)
+
+    fields_to_update = file_fields
+    fields_to_update.append('video_id')
+
+    print(f'Deleted from index: {deleted_from_index}')
+    Video.objects.bulk_update(deleted_from_index, fields_to_update)
+
+    # Now delete from the database
+    ids_for_deletion = [video.id for video in deleted_from_index]
+    print(f'Deleting ids: {ids_for_deletion}')
+    deleted, rows_count = Video.objects.filter(id__in=ids_for_deletion).delete()
+    print(f'Deleted {deleted} objects from database: {rows_count}')
+
+    return Response([video.id for video in deleted_from_index])
 
 
 @never_cache
@@ -67,20 +125,23 @@ def delete_videos(request):
 @authentication_classes([SessionAuthentication])
 @permission_classes([IsAuthenticated])
 def get_status(request):
-    video_tasks = request.data;
-    print('Getting status: ', video_tasks)
-    video_names = [video_task['video'] for video_task in video_tasks]
-    videos = Video.objects.filter(video__in=video_names)
+    """
+    Query the database for the status of the videos passed in request.data.
+    """
+    video_dicts = request.data
+    print('Getting status: ', video_dicts)
+    video_ids = [video_dict['id'] for video_dict in video_dicts]
+    videos = Video.objects.filter(id__in=video_ids)
 
-    for video_task in video_tasks:
-        video = videos.get(video__exact=video_task['video'])
-        video_task['status'] = video.status
-        video_task['thumbnail'] = default_storage.url(video.thumbnail.name) if video.thumbnail else None
-        video_task['original'] = default_storage.url(video.video.name) if video.video else None
+    for video_dict in video_dicts:
+        video = videos.get(id__exact=video_dict['id'])
+        video_dict['status'] = video.status
+        video_dict['thumbnail'] = default_storage.url(video.thumbnail.name) if video.thumbnail else None
+        video_dict['original'] = default_storage.url(video.video.name) if video.video else None
 
-    print(f'Status: {video_tasks}')
+    print(f'Status: {video_dicts}')
 
-    return Response(video_tasks)
+    return Response(video_dicts)
 
 
 @never_cache
@@ -95,32 +156,10 @@ def video_detail(_, video_id):
     return Response(serializer.data)
 
 
-def check_transloadit_signature(data):
-    """
-    Based on Node implementation at https://transloadit.com/docs/topics/assembly-notifications/#example
-    """
-    received_signature = data.get('signature')
-    payload = data.get('transloadit')
-
-    if not received_signature or not payload:
-        return False
-
-    # If the signature contains a colon, we expect it to be of format `algo:actual_signature`.
-    # If there are no colons, we assume it's a legacy signature using SHA-1.
-    algo_separator_index = received_signature.find(':')
-    algo = 'sha1' if algo_separator_index == -1 else received_signature[0, algo_separator_index]
-
-    calculated_signature = hmac.new(TRANSLOADIT_SECRET.encode('utf-8'),
-                                    payload.encode('utf-8'),
-                                    algo).hexdigest()
-
-    return calculated_signature == received_signature[algo_separator_index + 1:]
-
-
 @api_view(['POST'])
 @parser_classes([FormParser])
 def receive_notification_from_transcoder(request):
-    if not check_transloadit_signature(request.data):
+    if not verify_transloadit_signature(request.data):
         return Response(status=status.HTTP_401_UNAUTHORIZED)
 
     serializer = NotificationSerializer(data=request.data)
