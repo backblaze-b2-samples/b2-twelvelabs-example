@@ -3,6 +3,15 @@ import os
 import sys
 
 if __name__ == "__main__":
+    # Apply gevent monkey-patch if we are running the huey consumer with greenlet workers.
+    # See https://huey.readthedocs.io/en/latest/contrib.html#using-gevent
+    if 'run_huey' in sys.argv:
+        for arg in sys.argv:
+            if 'greenlet' in arg:
+                from gevent import monkey
+                monkey.patch_all()
+                break
+
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "cattube.settings")
     try:
         from django.core.management import execute_from_command_line

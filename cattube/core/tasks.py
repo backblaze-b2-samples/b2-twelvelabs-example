@@ -1,15 +1,15 @@
 import json
 from io import BytesIO
 from pathlib import Path
+from time import sleep
+from urllib.parse import urlparse
+from urllib.request import urlopen
 
 from django.core.files.storage import default_storage
 from huey.contrib import djhuey as huey
-from time import sleep
 from transloadit import client as TransloadIt
-from urllib.parse import urlparse, urlunsplit
-from urllib.request import urlopen
 
-from cattube.core.models import Video, VideoValueList
+from cattube.core.models import Video
 from cattube.core.utils import url_path_join
 from cattube.settings import TRANSLOADIT_KEY, TRANSLOADIT_SECRET, TWELVE_LABS_CLIENT, TWELVE_LABS_POLL_INTERVAL, \
     TWELVE_LABS_INDEX_ID, THUMBNAILS_PATH, TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH
@@ -75,23 +75,23 @@ def do_video_indexing(video_tasks):
     print(f'Done polling {video_tasks}')
 
 
-def get_video_data(type, video):
-    print(f'Getting {type} for {video.video_id}')
+def get_video_data(data_type, video):
+    print(f'Getting {data_type} for {video.video_id}')
 
-    # This will call the relevant Twelve Labs SDK method based on type:
+    # This will call the relevant Twelve Labs SDK method based on type, for example:
     # TWELVE_LABS_CLIENT.index.video.transcription(TWELVE_LABS_INDEX_ID, video.video_id)
     # TWELVE_LABS_CLIENT.index.video.text_in_video(TWELVE_LABS_INDEX_ID, video.video_id)
     # TWELVE_LABS_CLIENT.index.video.logo(TWELVE_LABS_INDEX_ID, video.video_id)
-    video_data = getattr(TWELVE_LABS_CLIENT.index.video, type)(TWELVE_LABS_INDEX_ID, video.video_id)
-    data_json = VideoValueList(root=video_data).model_dump_json(indent=2)
+    video_data = getattr(TWELVE_LABS_CLIENT.index.video, data_type)(TWELVE_LABS_INDEX_ID, video.video_id)
+    data_json = video_data.model_dump_json(indent=2)
     print(data_json)
 
-    data_path = url_path_join(type, f'{video.video_id}.json')
+    data_path = url_path_join(data_type, f'{video.video_id}.json')
     print(f'Saving transcript to {data_path}')
     print(f'default_storage: {default_storage}')
     name = default_storage.save(data_path, BytesIO(bytes(data_json, encoding='utf-8')))
     print(f'save() returned {name}')
-    setattr(video, type, data_path)
+    setattr(video, data_type, data_path)
 
 
 def get_all_video_data(video):
@@ -106,13 +106,14 @@ def get_all_video_data(video):
     default_storage.save(thumbnail_path, urlopen(thumbnail_url))
     video.thumbnail = thumbnail_path
 
-    for type in [TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH]:
-        get_video_data(type, video)
+    for data_type in [TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH]:
+        get_video_data(data_type, video)
 
 
-
-# helper based on https://github.com/transloadit/python-sdk/blob/faf225badafe59c311622ab63610f432aac8a77b/transloadit/assembly.py#L127
 def assembly_finished(assembly):
+    """
+    Helper based on https://github.com/transloadit/python-sdk/blob/faf225badafe59c311622ab63610f432aac8a77b/transloadit/assembly.py#L127
+    """
     status = assembly.get("ok")
     is_aborted = status == "REQUEST_ABORTED"
     is_canceled = status == "ASSEMBLY_CANCELED"

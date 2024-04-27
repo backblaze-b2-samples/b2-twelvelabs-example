@@ -4,7 +4,7 @@ django-storages==1.14.2
 djangorestframework==3.15.1
 python-dotenv==1.0.1
 requests==2.31.0
-twelvelabs @ git+https://github.com/metadaddy/twelvelabs-python@check-content-len
+twelvelabs @ git+https://github.com/metadaddy/twelvelabs-python@rootmodellist
 huey==2.5.0
 huey-django-orm==23.12.10.2
 pytransloadit==0.2.2

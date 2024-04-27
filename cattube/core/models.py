@@ -6,10 +6,7 @@ from django.db import models
 from django.utils import timezone
 
 from cattube.core.utils import url_path_join
-from cattube.settings import VIDEOS_PATH, THUMBNAILS_PATH
-from pydantic import RootModel
-from typing import List
-from twelvelabs.models import VideoValue, SearchData
+from cattube.settings import VIDEOS_PATH
 
 
 class Video(models.Model):
@@ -57,22 +54,6 @@ class SearchResult(models.Model):
     video = models.ForeignKey("Video", on_delete=models.DO_NOTHING)
     clip_count = models.IntegerField(default=0)
     clips = models.CharField(max_length=10240, default='')
-
-
-class VideoValueList(RootModel):
-    """
-    Wrapper so we can easily serialize lists of VideoValue objects back to JSON
-    TBD - move to twelvelabs-python
-    """
-    root: List[VideoValue]
-
-
-class SearchDataList(RootModel):
-    """
-    Wrapper so we can easily serialize lists of SearchData objects back to JSON
-    TBD - move to twelvelabs-python
-    """
-    root: List[SearchData]
 
 
 def add_new_files(user):

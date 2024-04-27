@@ -4,7 +4,6 @@ import traceback
 from django.core.files.storage import default_storage
 from django.shortcuts import get_object_or_404
 from django.views.decorators.cache import never_cache
-from httpx import HTTPStatusError
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import api_view, parser_classes, authentication_classes, permission_classes

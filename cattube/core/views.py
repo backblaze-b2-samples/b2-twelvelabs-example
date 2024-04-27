@@ -15,7 +15,7 @@ from django.views.generic.list import ListView
 from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID, POLL_TRANSLOADIT, TRANSCRIPTS_PATH, TEXT_PATH, \
     LOGOS_PATH
 from .forms import ResultForm
-from .models import Video, SearchResult, SearchDataList, add_new_files
+from .models import Video, SearchResult, add_new_files
 from .tasks import poll_video_loading
 from .utils import load_json_into_context, create_signed_transloadit_options
 
@@ -64,9 +64,14 @@ class VideoSearchView(ListView):
             video_ids = [group.id for group in search_data]
             videos = Video.objects.filter(video_id__in=video_ids)
             for group in search_data:
-                search_results.append(SearchResult(video=videos.get(video_id__exact=group.id),
-                                                   clip_count=len(group.clips),
-                                                   clips=SearchDataList(root=group.clips).model_dump_json()))
+                try:
+                    search_results.append(SearchResult(video=videos.get(video_id__exact=group.id),
+                                                       clip_count=len(group.clips),
+                                                       clips=group.clips.model_dump_json()))
+                except self.model.DoesNotExist:
+                    # There is a video in Twelve Labs, but no corresponding row in the database.
+                    # Just report it and carry on.
+                    print(f'Can\'t find match for video_id {group.id}')
 
             # Is there another page?
             try:

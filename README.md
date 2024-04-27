@@ -2,12 +2,30 @@
 
 'CatTube' is a simple media asset management app comprising: 
 
-* A web app implemented with [Django](https://www.djangoproject.com) and JavaScript.
+* A web app with a [Django](https://www.djangoproject.com) back end and JavaScript front end.
+* Background tasks managed by [Huey](https://huey.readthedocs.io/en/latest/).
 * Video uploading with [Uppy](https://uppy.io) and processing at [TransloadIt](https://transloadit.com/).
 * Cloud object storage at [Backblaze B2](https://www.backblaze.com/b2/cloud-storage.html).
 * Video understanding by [Twelve Labs](https://www.twelvelabs.io/)
 
+The app shows how to:
+
+* Submit videos stored in Backblaze B2 for indexing by Twelve Labs.
+* Retrieve data associated with indexed videos, such as thumbnails, logos, transcripts, etc, and store it in Backblaze B2.
+* Perform deep semantic search on the video index across multiple modalities: visual, conversation, text and logos.
+* Display search results, allowing the user to drill down and view segments of video returned by the search. 
+
 ## User Experience
+
+<figure>
+  <img src="screenshots/list-page.png" alt="CatTube index page" width="1024"/>
+  <figcaption>Index Page</figcaption>
+</figure>
+
+<figure>
+  <img src="screenshots/searchresult-screen.png" alt="CatTube search result page" width="1024"/>
+  <figcaption>Search Result</figcaption>
+</figure>
 
 ### Uploading Videos
 
@@ -15,9 +33,9 @@
 
 * Once the video is uploaded, a JavaScript front end in the browser polls an API at the web app, monitoring its status.
 
-* A Huey task polls TransloadIt until the upload is complete, when it updates the video's database record with the name of the uploaded file.
+* A Huey task polls TransloadIt until the upload is complete, at which point it updates the video's database record with the name of the uploaded file.
 
-* The next call from the JavaScript front end will return with the name of the uploaded video, signalling that the upload operation is complete. The browser shows the uploaded video, ready for viewing.
+* The next call from the JavaScript front end will return with the name of the uploaded video, signalling that the upload operation is complete. The browser shows the uploaded video with a white noise thumbnail, indicating that it is stored in Backblaze B2, but not yet indexed by Twelve Labs.
 
 ### Indexing Videos
 
@@ -25,15 +43,15 @@
 
 * The JavaScript front end sends the list of videos to an API in the web app.
 
-* The web app's index API starts a Huey task that creates a Twelve Labs index task for each video, then polls for the status of each video until all are ready.
+* The web app's index API starts a Huey task that creates a Twelve Labs index task for each video, then polls for the status of each video, updating the database, until all are ready.
 
 * As each video reaches the ready state, the Huey task copies the thumbnail, transcript and other data to Backblaze B2.
 
-* Once a video is indexed, its thumbnail is displayed in the main list of videos, and its transcript etc are shown on its detail page.
+* Once a video is indexed, its thumbnail is displayed in the main list of videos, and its transcript and other data are shown on its detail page.
 
 ### Searching Videos
 
-* Users can search on natural language queries such as "cats playing on floor"
+* Users can search on natural language queries such as "cats playing on the floor"
 
 This webinar recording shows the website in action and explains how the pieces fit together:
 
@@ -41,7 +59,6 @@ This webinar recording shows the website in action and explains how the pieces f
 
 ## Prerequisites
 
-* An internet-accessible host
 * [Python 3.9.2](https://www.python.org/downloads/release/python-392/) (other Python versions _may_ work) and `pip`
 * A Backblaze account. [Sign up here](https://www.backblaze.com/b2/sign-up.html?referrer=nopref).
 * A TransloadIt account. [Sign up here](https://transloadit.com/c/signup/).
@@ -51,7 +68,7 @@ This webinar recording shows the website in action and explains how the pieces f
 
 Click **Buckets** in the navigation menu on the left, then **Create a Bucket**. Give the bucket a name (you may need more than one try, the bucket name must be globally unique!), leave the remaining settings, and click **Create a Bucket**. Make a note of the **Endpoint** shown in the bucket details; it's a domain name of the form `s3.us-west-004.backblazeb2.com`. Make a note also of the region portion of the endpoint; this is the string following `s3.` and preceding `.backblazeb2.com`. In the example above, it's `us-west-004`, but yours may be different. You can use the same bucket for static assets, such as the web app's CSS and JavaScript files, and your videos, or create a bucket for each purpose.  
 
-You'll be creating two Application Keys–one each for TransloadIt and the web application. Why two keys? The two B2 clients need different levels of access: TransloadIt only needs to write raw and processed files; the web app needs read/write access. 
+You'll be creating two Application Keys–one each for TransloadIt and the web application. Why two keys? The two B2 clients need different levels of access: TransloadIt only needs to write raw and processed files; the web app and tasks need read/write access. 
 
 Click **App Keys** in the left nav menu, then **Add a New Application Key**. Name the key `write-only-key-for-transloadit`. Select your bucket, **Write Only** and **Allow List All Bucket Names**, and click **Create New Key**. Again, make careful note of the key!
 
@@ -138,6 +155,22 @@ listen on the standard HTTP port on all interfaces, you would use:
 ```bash
 python manage.py runserver 0.0.0.0:80
 ```
+
+### Run the Huey consumer
+
+To start the Huey consumer with a single worker thread:
+
+```bash
+python manage.py run_huey
+```
+
+Since the tasks spend most of their time waiting on sockets, you will likely want to run multiple greenlet workers, for example:
+
+```bash
+python manage.py run_huey --workers=16 --worker-type=greenlet
+```
+
+Huey can run workers as threads, processes or [greenlets](https://greenlet.readthedocs.io/en/latest/). See the [Huey consumer documentation](https://huey.readthedocs.io/en/latest/consumer.html) for details. 
 
 ## Caveats
 

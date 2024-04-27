@@ -8,7 +8,7 @@
         ":original"
       ],
       "robot": "/backblaze/store",
-      "credentials": "metadaddy-twelvelabs",
+      "credentials": "your-credentials-name",
       "path": "videos/${file.name}"
     }
   }

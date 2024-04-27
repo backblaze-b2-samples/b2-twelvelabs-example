@@ -134,7 +134,7 @@ STORAGES = {
         },
     },
     "staticfiles": {
-        "BACKEND": "storages.backends.s3.S3Storage",
+        "BACKEND": "cattube.storage.CachedS3Storage",
         "OPTIONS": {
             "access_key": os.environ['STATIC_ACCESS_KEY_ID'],
             "secret_key": os.environ['STATIC_SECRET_ACCESS_KEY'],

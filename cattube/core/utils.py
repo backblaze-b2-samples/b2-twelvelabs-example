@@ -40,12 +40,12 @@ def load_json(obj, data_type):
     return json.loads(data) if data else None
 
 
-def load_json_into_context(context, data_types, object):
+def load_json_into_context(context, data_types, obj):
     """
     Populate the context with the JSON resources for the given types.
     """
     for data_type in data_types:
-        context[data_type] = load_json(object, data_type)
+        context[data_type] = load_json(obj, data_type)
 
 
 def verify_transloadit_signature(data):
