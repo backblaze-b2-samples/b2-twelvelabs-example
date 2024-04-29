@@ -99,8 +99,8 @@ Twelve Labs creates a default video index when you sign up. Log in to Twelve Lab
 Clone this repository onto the host, `cd` into the local repository directory, then use `pip install` to install dependencies for the components as required:
 
 ```bash
-git clone git@github.com:backblaze-b2-samples/b2-transloadit-example.git
-cd b2-transloadit-example
+git clone git@github.com:backblaze-b2-samples/b2-twelvelabs-example.git
+cd b2-twelvelabs-example
 pip install -r requirements.txt
 ```
 
