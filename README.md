@@ -1,6 +1,6 @@
 # Backblaze B2 + Twelve Labs Media Asset Management Example
 
-'CatTube' is a simple media asset management app comprising: 
+This is a simple media asset management app comprising: 
 
 * A web app with a [Django](https://www.djangoproject.com) back end and JavaScript front end.
 * Background tasks managed by [Huey](https://huey.readthedocs.io/en/latest/).
