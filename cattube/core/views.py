@@ -46,7 +46,7 @@ class VideoSearchView(ListView):
         """
         query = self.request.GET.get("query", None)
 
-        result = TWELVE_LABS_CLIENT.search.query(
+        results = TWELVE_LABS_CLIENT.search.query(
             TWELVE_LABS_INDEX_ID,
             query,
             ["visual", "conversation", "text_in_video", "logo"],
@@ -55,7 +55,7 @@ class VideoSearchView(ListView):
         )
 
         # Search results may be in multiple pages, so we need to loop until we're done retrieving them
-        search_data = result.data
+        search_data = results.data
         print(f"First page's data: {search_data}")
 
         search_results = []
@@ -75,7 +75,7 @@ class VideoSearchView(ListView):
 
             # Is there another page?
             try:
-                search_data = next(result)
+                search_data = next(results)
                 print(f"Next page's data: {search_data}")
             except StopIteration:
                 print("There is no next page in search result")
@@ -122,7 +122,6 @@ class VideoResultView(SingleObjectTemplateResponseMixin, SingleObjectMixin, View
         context = self.get_context_data(object=self.object)
         context['clips'] = json.loads(form.cleaned_data['clips'])
         context['query'] = form.cleaned_data['query']
-        # TBD - load JSON into the page
         load_json_into_context(context, [TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH], self.object)
 
         return render(request, self.template_name, context)
