@@ -128,6 +128,7 @@ STORAGES = {
         "OPTIONS": {
             "access_key": os.environ['DEFAULT_ACCESS_KEY_ID'],
             "secret_key": os.environ['DEFAULT_SECRET_ACCESS_KEY'],
+            "endpoint_url": os.environ['DEFAULT_S3_ENDPOINT_URL'],
             "region_name": os.environ['DEFAULT_S3_REGION_NAME'],
             "bucket_name": os.environ['DEFAULT_STORAGE_BUCKET_NAME'],
             "location": os.environ['DEFAULT_STORAGE_LOCATION'],
@@ -138,6 +139,7 @@ STORAGES = {
         "OPTIONS": {
             "access_key": os.environ['STATIC_ACCESS_KEY_ID'],
             "secret_key": os.environ['STATIC_SECRET_ACCESS_KEY'],
+            "endpoint_url": os.environ['STATIC_S3_ENDPOINT_URL'],
             "region_name": os.environ['STATIC_S3_REGION_NAME'],
             "bucket_name": os.environ['STATIC_STORAGE_BUCKET_NAME'],
             "location": os.environ['STATIC_STORAGE_LOCATION'],
