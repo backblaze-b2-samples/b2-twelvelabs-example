@@ -3,7 +3,7 @@ Django==5.0.8
 django-storages==1.14.2
 djangorestframework==3.15.2
 python-dotenv==1.0.1
-requests==2.31.0
+requests==2.32.2
 twelvelabs==0.2.7
 huey==2.5.0
 huey-django-orm==23.12.10.2
