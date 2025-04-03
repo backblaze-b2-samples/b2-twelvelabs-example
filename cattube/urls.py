@@ -7,6 +7,7 @@ from cattube.core import views
 urlpatterns = [
     # Website
     path('', views.VideoListView.as_view(), name='home'),
+    path('reset', views.VideoResetView.as_view(), name='reset'),
     path('search', views.VideoSearchView.as_view(), name='search'),
     path('login', auth_views.LoginView.as_view(), name='login'),
     path('logout', auth_views.LogoutView.as_view(), name='logout'),

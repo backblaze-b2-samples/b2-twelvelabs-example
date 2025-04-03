@@ -1,0 +1,16 @@
+{% load custom_tags %}
+{% if user.is_authenticated %}
+    {% is_url_name request "home" as is_home_page %}
+    {% if not is_home_page %}
+    <a href="{% url 'home' %}">Home</a> /
+    {% endif %}
+    {% is_url_name request "upload" as is_upload_page %}
+    {% if not is_upload_page %}
+    <a href="/upload">Upload a video</a> /
+    {% endif %}
+    <a href="/reset" onclick="return confirm('Are you sure you want to remove all of the videos from the TwelveLabs index?')">Reset</a> /
+    <a href="{% url 'logout' %}">Log out</a>
+{% else %}
+    <a href="{% url 'login' %}">Log in</a>
+{% endif %}
+<hr>

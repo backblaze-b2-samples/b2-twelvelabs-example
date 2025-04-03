@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 import json
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, UTC
 from urllib.parse import urlunsplit, urlsplit
 
 from django.utils.safestring import mark_safe
@@ -40,14 +40,6 @@ def load_json(obj, data_type):
     return json.loads(data) if data else None
 
 
-def load_json_into_context(context, data_types, obj):
-    """
-    Populate the context with the JSON resources for the given types.
-    """
-    for data_type in data_types:
-        context[data_type] = load_json(obj, data_type)
-
-
 def verify_transloadit_signature(data):
     """
     Based on Node implementation at https://transloadit.com/docs/topics/assembly-notifications/#example
@@ -78,7 +70,7 @@ def create_signed_transloadit_options(notify_url):
     params = {
         'auth': {
             'key': settings.TRANSLOADIT_KEY,
-            'expires': (timedelta(seconds=60 * 60) + datetime.utcnow()).strftime("%Y/%m/%d %H:%M:%S+00:00"),
+            'expires': (timedelta(seconds=60 * 60) + datetime.now(UTC)).strftime("%Y/%m/%d %H:%M:%S+00:00"),
         },
         'template_id': settings.TRANSLOADIT_TEMPLATE_ID,
     }

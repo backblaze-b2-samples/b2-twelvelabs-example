@@ -1,8 +1,24 @@
-<div class="result-video">
-    <video width="640" height="360" controls>
-        <source src="{{ object.video.url }}" type="video/mp4">
-    </video>
-    <h2>{{ object.title }}</h2>
+{% load static %}
+<div class="video" data-videoid="{{ video.id }}">
+{% if video.status == "Ready" %}
+    <div class="thumbnail tn-large">
+{% else %}
+    <div class="thumbnail tn-large" data-status="{{ video.status }}">
+{% endif %}
+    {% if video.thumbnail %}
+        <video class="tn-large" controls>
+            <source src="{{ object.video.url }}" type="video/mp4">
+        </video>
+    {% else %}
+        <img class="thumbnail tn-large" src="{% static 'images/whitenoise320x180.png' %}"><br>
+    {% endif %}
+    </div>
+    <h2>{{ video.title }}</h2>
     {{ video.user.username }}<br>
     {{ video.uploaded_at }}
 </div>
+<script>
+  window.addEventListener("load", () => {
+    this.listenForTasks();
+  });
+</script>

@@ -32,8 +32,14 @@ function updateIndexUI(tasks) {
       const imgThumbnail = divThumbnail.querySelector('img.thumbnail')
       if (task.status === 'Ready') {
         divThumbnail.dataset.status = "";
-        imgThumbnail.src = task.thumbnail;
-        divVideo.querySelector('input[type=checkbox]')?.remove();
+        if (imgThumbnail.classList.contains("tn-small")) {
+          // On list page - swap out individual image
+          imgThumbnail.src = task.thumbnail;
+          divVideo.querySelector('input[type=checkbox]')?.remove();
+        } else {
+          // On detail page - just reload rather than messing with the DOM
+          window.location.reload();
+        }
       } else {
         divThumbnail.dataset.status = task.status;
         done = false;
@@ -45,7 +51,7 @@ function updateIndexUI(tasks) {
 
 function getVideoStatus(tasks, callback) {
   console.log("Getting status");
-  fetch('api/videos/status', {
+  fetch('/api/videos/status', {
     method:'POST',
     headers:{
       'Content-Type': 'application/json',
@@ -72,8 +78,18 @@ function listenForStatusUpdates(tasks) {
   }, 1000);
 }
 
+function listenForTasks() {
+  const indexing = document.querySelectorAll('div.thumbnail:not([data-status=""]):not([data-status="Ready"]):not([data-status="Failed"])');
+  if (indexing.length > 0) {
+    const tasks = Array.from(indexing, thumbnail => {
+      return {id: thumbnail.parentElement.dataset.videoid}
+    })
+    listenForStatusUpdates(tasks);
+  }
+}
+
 function videosOperation(data, operation, callback) {
-  fetch(`api/videos/${operation}`, {
+  fetch(`/api/videos/${operation}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -85,6 +101,13 @@ function videosOperation(data, operation, callback) {
     return response.json();
   }).then((data) => {
     callback(data)
+  });
+}
+
+function indexVideo(videoId) {
+  videosOperation({ 'videos': [videoId] }, 'index', data => {
+    console.log('tasks:', data);
+    window.location.reload();
   });
 }
 
@@ -229,7 +252,7 @@ async function loadClips(div, url) {
     }
     divElement.innerHTML = content;
     if (data.length > 5) {
-      divElement.querySelector('.button').onclick = readMore;
+      divElement.querySelector('.button').onclick = readMoreHandler;
     }
   })
 }
@@ -281,7 +304,7 @@ function getOuterHeight(el) {
     + parseInt(computedStyle.getPropertyValue('margin-bottom'), 10);
 }
 
-function readMore(event) {
+function readMoreHandler(event) {
   // The button link
   const el = event.currentTarget;
   // The paragraph containing the button link

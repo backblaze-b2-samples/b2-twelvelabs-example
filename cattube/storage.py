@@ -13,7 +13,7 @@ class CachedS3Storage(S3Storage):
     """
     def url(self, name, parameters=None, expire=None, http_method=None):
         if expire is None:
-            expire = self.querystring_expire
+            expire = self.querystring_expire  # noqa
 
         # Cache the result for 3/4 of the temp_url's lifetime.
         timeout = int(expire * 0.75)

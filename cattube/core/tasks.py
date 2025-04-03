@@ -7,12 +7,13 @@ from urllib.request import urlopen
 
 from django.core.files.storage import default_storage
 from huey.contrib import djhuey as huey
-from transloadit import client as TransloadIt
+from transloadit import client as transload_it
+from twelvelabs import BadRequestError
 
 from cattube.core.models import Video
 from cattube.core.utils import url_path_join
 from cattube.settings import TRANSLOADIT_KEY, TRANSLOADIT_SECRET, TWELVE_LABS_CLIENT, TWELVE_LABS_POLL_INTERVAL, \
-    TWELVE_LABS_INDEX_ID, THUMBNAILS_PATH, TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH
+    TWELVE_LABS_INDEX_ID, THUMBNAILS_PATH
 
 
 @huey.db_task()
@@ -20,14 +21,28 @@ def do_video_indexing(video_tasks):
     print(f'Creating tasks: {video_tasks}')
 
     # Create a task for each video we want to index
+    error_tasks = []
     for video_task in video_tasks:
-        task = TWELVE_LABS_CLIENT.task.create(
-            TWELVE_LABS_INDEX_ID,
-            url=default_storage.url(video_task['video']),
-            disable_video_stream=True
-        )
-        print(f'Created task: {task}')
-        video_task['task_id'] = task.id
+        try:
+            task = TWELVE_LABS_CLIENT.task.create(
+                TWELVE_LABS_INDEX_ID,
+                url=default_storage.url(video_task['video']),
+                enable_video_stream=False
+            )
+            print(f'Created task: {task}')
+            video_task['task_id'] = task.id
+        except BadRequestError as ex:
+            print(f'Error indexing {video_task['video']}: {ex.message}')
+            error_tasks.append(video_task)
+
+    print(f'{len(error_tasks)} errors creating tasks')
+    if len(error_tasks) > 0:
+        video_ids = [error_task['id'] for error_task in error_tasks]
+        videos = Video.objects.filter(id__in=video_ids)
+        for video in videos:
+            video.status = 'Error'
+        Video.objects.bulk_update(videos, ['status'])
+        video_tasks = [video_task for video_task in video_tasks if video_task not in error_tasks]
 
     print(f'Created {len(video_tasks)} tasks')
 
@@ -47,9 +62,9 @@ def do_video_indexing(video_tasks):
             video = videos.get(video__exact=video_task['video'])
 
             # Do we still need to retrieve status for this task?
-            if video.status != 'Ready':
+            if not video.done:
                 task = TWELVE_LABS_CLIENT.task.retrieve(video_task['task_id'])
-                if task.status != 'ready':
+                if not task.done:
                     # We'll need to go round the loop again
                     done = False
 
@@ -59,13 +74,13 @@ def do_video_indexing(video_tasks):
                     new_status = task.status.title()
                     print(f'Updating status for {video_task["video"]} from {video.status} to {new_status}')
                     video.status = new_status
-                    if task.status == 'ready':
+                    if task.done:
                         video.video_id = task.video_id
-                        get_all_video_data(video)
+                        get_thumbnail(video)
                     videos_to_save.append(video)
 
         if len(videos_to_save) > 0:
-            Video.objects.bulk_update(videos_to_save, ['status', 'video_id', THUMBNAILS_PATH, TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH])
+            Video.objects.bulk_update(videos_to_save, ['status', 'video_id', THUMBNAILS_PATH])
 
         if done:
             break
@@ -75,39 +90,23 @@ def do_video_indexing(video_tasks):
     print(f'Done polling {video_tasks}')
 
 
-def get_video_data(data_type, video):
-    print(f'Getting {data_type} for {video.video_id}')
-
-    # This will call the relevant Twelve Labs SDK method based on type, for example:
-    # TWELVE_LABS_CLIENT.index.video.transcription(TWELVE_LABS_INDEX_ID, video.video_id)
-    # TWELVE_LABS_CLIENT.index.video.text_in_video(TWELVE_LABS_INDEX_ID, video.video_id)
-    # TWELVE_LABS_CLIENT.index.video.logo(TWELVE_LABS_INDEX_ID, video.video_id)
-    video_data = getattr(TWELVE_LABS_CLIENT.index.video, data_type)(TWELVE_LABS_INDEX_ID, video.video_id)
-    data_json = video_data.model_dump_json(indent=2)
-    print(data_json)
-
-    data_path = url_path_join(data_type, f'{video.video_id}.json')
-    print(f'Saving transcript to {data_path}')
-    print(f'default_storage: {default_storage}')
-    name = default_storage.save(data_path, BytesIO(bytes(data_json, encoding='utf-8')))
-    print(f'save() returned {name}')
-    setattr(video, data_type, data_path)
-
-
-def get_all_video_data(video):
+def get_thumbnail(video: Video):
     print(f'Getting thumbnail for {video.video_id}')
-    thumbnail_url = TWELVE_LABS_CLIENT.index.video.thumbnail(TWELVE_LABS_INDEX_ID, video.video_id)
-    print(f'Got response: {thumbnail_url}')
+    # Need to get the task to get the hls with the thumbnail ID
+    task = TWELVE_LABS_CLIENT.task.retrieve(video.video_id)
+    print(f'Got response: {task}')
 
-    url_parts = urlparse(thumbnail_url)
-    thumbnail_path = url_path_join(THUMBNAILS_PATH, f'{video.video_id}{Path(url_parts.path).suffix}')
+    if task.hls and task.hls.thumbnail_urls and len(task.hls.thumbnail_urls) > 0:
+        thumbnail_url = task.hls.thumbnail_urls[0]
 
-    print(f'Saving {thumbnail_url} to {thumbnail_path}')
-    default_storage.save(thumbnail_path, urlopen(thumbnail_url))
-    video.thumbnail = thumbnail_path
+        url_parts = urlparse(thumbnail_url)
+        thumbnail_path = url_path_join(THUMBNAILS_PATH, f'{video.video_id}{Path(url_parts.path).suffix}')
 
-    for data_type in [TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH]:
-        get_video_data(data_type, video)
+        print(f'Saving {thumbnail_url} to {thumbnail_path}')
+        default_storage.save(thumbnail_path, urlopen(thumbnail_url))
+        video.thumbnail = thumbnail_path
+    else:
+        print(f'No thumbnail for {video.video_id}')
 
 
 def assembly_finished(assembly):
@@ -128,7 +127,7 @@ def assembly_finished(assembly):
 def poll_video_loading(assembly_id):
     print(f'Polling TransloadIt for {assembly_id}')
 
-    client = TransloadIt.Transloadit(TRANSLOADIT_KEY, TRANSLOADIT_SECRET)
+    client = transload_it.Transloadit(TRANSLOADIT_KEY, TRANSLOADIT_SECRET)
 
     while True:
         response = client.get_assembly(assembly_id)

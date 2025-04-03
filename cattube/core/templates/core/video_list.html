@@ -1,29 +1,19 @@
 {% extends 'base.html' %}
 {% load static %}
-
 {% block content %}
-{% if user.is_authenticated %}
-    <a href="/upload">Upload a video</a>
-    / <a href="{% url 'logout' %}">Log out</a>
-    <!-- 'Delete all' is useful for testing! -->
-    <!-- / <a href="/videos/delete_all">Delete all</a> -->
-{% else %}
-    <a href="{% url 'login' %}">Log in</a>
-{% endif %}
-    <hr>
     <div id="grid">
         {% for video in object_list %}
             <div class="video" data-videoid="{{ video.id }}">
                 {% if video.status == "Ready" %}
-                    <div class="thumbnail" data-status="">
+                    <div class="thumbnail tn-small" data-status="">
                 {% else %}
-                    <div class="thumbnail" data-status="{{ video.status }}">
+                    <div class="thumbnail tn-small" data-status="{{ video.status }}">
                 {% endif %}
                         <a href="{% url 'watch' video.id %}">
                             {% if video.thumbnail %}
-                                <img class="thumbnail" src="{{ video.thumbnail.url }}"><br>
+                                <img class="thumbnail tn-small" src="{{ video.thumbnail.url }}"><br>
                             {% else %}
-                                <img class="thumbnail" src="{% static 'images/whitenoise320x180.png' %}"><br>
+                                <img class="thumbnail tn-small" src="{% static 'images/whitenoise320x180.png' %}"><br>
                             {% endif %}
                         </a>
                         <input type="checkbox" onclick="checkboxClicked({{ page_obj.paginator.object_list|length }})"/>
@@ -78,14 +68,9 @@
         <span id="selection-text">&nbsp;</span>
     </div>
     <script>
-        window.onload = () => {
-          document.querySelector("#select-page").disabled = (document.querySelectorAll("input[type=checkbox]").length === 0);
-
-          const indexing = document.querySelectorAll('div.thumbnail:not([data-status=""]):not([data-status="Ready"])');
-          if (indexing.length > 0) {
-            const tasks = Array.from(indexing, thumbnail => { return { id: thumbnail.parentElement.dataset.videoid} })
-            listenForStatusUpdates(tasks);
-          }
-        };
+      window.addEventListener("load", () => {
+        document.querySelector("#select-page").disabled = (document.querySelectorAll("input[type=checkbox]").length === 0);
+        this.listenForTasks();
+      });
     </script>
 {% endblock %}

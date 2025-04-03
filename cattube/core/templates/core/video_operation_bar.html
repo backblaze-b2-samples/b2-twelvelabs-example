@@ -1,0 +1,10 @@
+<div class="delete-bar">
+    <hr>
+    <form method="POST" action="{% url 'delete' object.id %}">
+        {% csrf_token %}
+        <button type="submit" onclick="return confirm('Are you sure do you want to delete \'{{ object.title }}\'?')">
+            Delete Video
+        </button>
+        <button id="index" type="button" onclick="indexVideo({{ object.id }})">Index Video</button>
+    </form>
+</div>

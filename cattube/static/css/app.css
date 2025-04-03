@@ -56,6 +56,10 @@ div.logo-strip > a {
     text-decoration: none;
 }
 
+div.video {
+    display: inline-block;
+}
+
 div.thumbnail {
     z-index: 0;
     position: relative;
@@ -68,11 +72,18 @@ div.thumbnail:after {
     top:50%;
     left:50%;
     transform:translate(-50%, -50%);
-    font-size: 50px;
     font-weight: bold;
     -webkit-text-stroke: 1px black;
     position: absolute;
     z-index: 10;
+}
+
+div.tn-small:after {
+    font-size: 50px;
+}
+
+div.tn-large:after {
+    font-size: 100px;
 }
 
 /* Checkbox styling from https://moderncss.dev/pure-css-custom-checkbox-style/ */
@@ -123,8 +134,16 @@ input[type="checkbox"]:disabled {
 
 img.thumbnail {
     border: 1px solid #c0c0c0;
+}
+
+img.tn-small {
     width: 320px;
     height: 180px;
+}
+
+img.tn-large, video.tn-large {
+    width: 640px;
+    height: 360px;
 }
 
 div.buttonbar {
@@ -136,13 +155,12 @@ div.selection {
 }
 
 div.clips {
-    margin-left: 660px;
+    margin-left: 20px;
     line-height: 150%;
 }
 
-div.result-video {
-    float: left;
-    width: 640px;
+div.clips h3 {
+    margin-block-start: 0;
 }
 
 div.delete-bar {
@@ -156,7 +174,7 @@ div.clips p {
 
 /* "Read more" from https://css-tricks.com/text-fade-read-more/ */
 .expandable {
-    max-height: 120px;
+    max-height: 295px;
     position: relative;
     overflow: hidden;
 }
@@ -207,4 +225,8 @@ div.clips p {
 
 .subhead {
     font-style: italic;
+}
+
+div.flex {
+    display: flex;
 }

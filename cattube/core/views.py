@@ -3,6 +3,7 @@ import json
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
+from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
@@ -11,13 +12,13 @@ from django.views.generic.detail import DetailView, SingleObjectTemplateResponse
 from django.views.generic.edit import CreateView
 from django.views.generic.edit import DeleteView
 from django.views.generic.list import ListView
+from twelvelabs import BadRequestError
 
-from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID, POLL_TRANSLOADIT, TRANSCRIPTS_PATH, TEXT_PATH, \
-    LOGOS_PATH
+from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID, POLL_TRANSLOADIT
 from .forms import ResultForm
 from .models import Video, SearchResult, add_new_files
 from .tasks import poll_video_loading
-from .utils import load_json_into_context, create_signed_transloadit_options
+from .utils import create_signed_transloadit_options
 
 PAGE_SIZE = 12
 
@@ -35,6 +36,32 @@ class VideoListView(ListView):
         return super().get_queryset()
 
 
+def delete_page(page):
+    for video in page:
+        print(f'Deleting {video.id} from index')
+        TWELVE_LABS_CLIENT.index.video.delete(TWELVE_LABS_INDEX_ID, video.id)
+
+def delete_videos():
+    videos = TWELVE_LABS_CLIENT.index.video.list_pagination(TWELVE_LABS_INDEX_ID)
+    # Strange iterator logic...
+    delete_page(videos.data)
+    while True:
+        try:
+            delete_page(next(videos))
+        except StopIteration:
+            break
+
+@method_decorator(login_required, name='dispatch')
+class VideoResetView(ListView):
+    def get(self, request, *args, **kwargs):
+        # Delete videos from TwelveLabs
+        delete_videos()
+        # Delete videos from the database
+        Video.objects.all().delete()
+        # Redirect to home
+        return HttpResponseRedirect(reverse('home'))
+
+
 class VideoSearchView(ListView):
     model = Video
     paginate_by = PAGE_SIZE
@@ -48,10 +75,10 @@ class VideoSearchView(ListView):
 
         results = TWELVE_LABS_CLIENT.search.query(
             TWELVE_LABS_INDEX_ID,
-            query,
-            ["visual", "conversation", "text_in_video", "logo"],
+            ["visual", "audio"],
+            query_text=query,
             group_by="video",
-            threshold="medium"
+            threshold="high"
         )
 
         # Search results may be in multiple pages, so we need to loop until we're done retrieving them
@@ -69,9 +96,9 @@ class VideoSearchView(ListView):
                                                        clip_count=len(group.clips),
                                                        clips=group.clips.model_dump_json()))
                 except self.model.DoesNotExist:
-                    # There is a video in Twelve Labs, but no corresponding row in the database.
+                    # There is a video in TwelveLabs, but no corresponding row in the database.
                     # Just report it and carry on.
-                    print(f'Can\'t find match for video_id {group.id}')
+                    print(f'Video {group.id} is in TwelveLabs, but not in the database')
 
             # Is there another page?
             try:
@@ -122,7 +149,6 @@ class VideoResultView(SingleObjectTemplateResponseMixin, SingleObjectMixin, View
         context = self.get_context_data(object=self.object)
         context['clips'] = json.loads(form.cleaned_data['clips'])
         context['query'] = form.cleaned_data['query']
-        load_json_into_context(context, [TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH], self.object)
 
         return render(request, self.template_name, context)
 
@@ -131,14 +157,6 @@ class VideoDetailView(DetailView):
     model = Video
     slug_field = 'id'
     slug_url_kwarg = 'video_id'
-
-    def get_context_data(self, **kwargs):
-        """
-        Load all the video data from B2 into the context
-        """
-        context = super().get_context_data(**kwargs)
-        load_json_into_context(context, [TRANSCRIPTS_PATH, TEXT_PATH, LOGOS_PATH], self.object)
-        return context
 
 
 @method_decorator(login_required, name='dispatch')

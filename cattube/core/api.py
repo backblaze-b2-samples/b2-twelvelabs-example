@@ -31,7 +31,7 @@ def index_videos(request):
         videos = Video.objects.filter(id__in=request.data['videos'])
 
     # Don't index videos that have already been submitted for indexing
-    videos = videos.filter(status__in=['', 'Sending'])
+    videos = videos.exclude(status__in=['Validating', 'Pending', 'Indexing'])
 
     # Update status in database so that UI can get it
     video_dicts = []
@@ -67,7 +67,7 @@ def delete_videos(request):
 
     # Try deleting from B2 first
     deleted_from_storage = []
-    file_fields = ['video', 'thumbnail', 'transcription', 'text_in_video', 'logo']
+    file_fields = ['video', 'thumbnail']
     for video in videos:
         deletion_failed = False
         for attr in file_fields:
@@ -88,7 +88,7 @@ def delete_videos(request):
 
     # Now delete from Twelve Labs
     deleted_from_index = []
-    file_fields = ['thumbnail', 'transcription', 'text_in_video', 'logo']
+    file_fields = ['thumbnail']
     for video in deleted_from_storage:
         try:
             try:

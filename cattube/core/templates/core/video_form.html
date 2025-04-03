@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
 {% load static %}
-
 {% block content %}
     <link rel="stylesheet" href="https://releases.transloadit.com/uppy/v3.5.0/uppy.css">
     <style>
@@ -10,9 +9,6 @@
             width: 100%;
         }
     </style>
-    <a href="{% url 'home' %}">Home</a>
-    / <a href="{% url 'logout' %}">Log out</a>
-    <hr>
     <div id="uploader">
         <h2>Upload a Video</h2>
         <form id="upload-form">

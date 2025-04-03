@@ -1,27 +1,17 @@
 {% extends 'base.html' %}
 {% load static %}
-
 {% block content %}
-{% if user.is_authenticated %}
-    <a href="/upload">Upload a video</a>
-    / <a href="{% url 'logout' %}">Log out</a>
-    <!-- 'Delete all' is useful for testing! -->
-    <!-- / <a href="/videos/delete_all">Delete all</a> -->
-{% else %}
-    <a href="{% url 'login' %}">Log in</a>
-{% endif %}
-    <hr>
     <div id="grid">
         {% for result in object_list %}
             <div class="video" data-video="{{ result.video.video }}">
-                <div class="thumbnail" data-status="">
+                <div class="thumbnail tn-small" data-status="">
                     <form id="form-id-{{ forloop.counter }}" action="{% url 'result' %}" method="post">
                         {% csrf_token %}
                         <input type="hidden" name="id" value="{{ result.video.id }}">
                         <input type="hidden" name="clips" value="{{ result.clips }}">
                         <input type="hidden" name="query" value="{{ query }}">
                         <a onclick="document.querySelector('#form-id-{{ forloop.counter }}').submit();">
-                            <img class="thumbnail" src="{{ result.video.thumbnail.url }}"><br>
+                            <img class="thumbnail tn-small" src="{{ result.video.thumbnail.url }}"><br>
                         </a>
                     </form>
                 </div>
