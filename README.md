@@ -11,8 +11,7 @@ This is a simple media asset management app comprising:
 The app shows how to:
 
 * Submit videos stored in Backblaze B2 for indexing by Twelve Labs.
-* Retrieve data associated with indexed videos, such as thumbnails, logos, transcripts, etc, and store it in Backblaze B2.
-* Perform deep semantic search on the video index across multiple modalities: visual, conversation, text and logos.
+* Perform deep semantic search on the video index across both visual and audio modalities.
 * Display search results, allowing the user to drill down and view segments of video returned by the search. 
 
 ## User Experience
@@ -22,14 +21,9 @@ The app shows how to:
   <figcaption>Index Page</figcaption>
 </figure>
 
-<figure>
-  <img src="screenshots/searchresult-screen.png" alt="CatTube search result page" width="1024"/>
-  <figcaption>Search Result</figcaption>
-</figure>
-
 ### Uploading Videos
 
-* Users upload videos from their browser to TransloadIt via the Uppy widget on the web app's 'Upload Video' page.
+* Users upload videos from their browser to Backblaze B2 via TransloadIt's Uppy widget on the web app's 'Upload Video' page.
 
 * Once the video is uploaded, a JavaScript front end in the browser polls an API at the web app, monitoring its status.
 
@@ -45,15 +39,15 @@ The app shows how to:
 
 * The web app's index API starts a Huey task that creates a Twelve Labs index task for each video, then polls for the status of each video, updating the database, until all are ready.
 
-* As each video reaches the ready state, the Huey task copies the thumbnail, transcript and other data to Backblaze B2.
+* As each video reaches the ready state, the Huey task copies the thumbnail to Backblaze B2.
 
-* Once a video is indexed, its thumbnail is displayed in the main list of videos, and its transcript and other data are shown on its detail page.
+* Once a video is indexed, its thumbnail is displayed in the main list of videos.
 
 ### Searching Videos
 
 * Users can search on natural language queries such as "cats playing on the floor"
 
-This webinar recording shows the website in action and explains how the pieces fit together:
+This webinar recording shows a previous version of the website in action and explains how the pieces fit together:
 
 [![Vision Meets Storage: AI-Driven Insights with Twelve Labs](https://cdn.brighttalk.com/ams/california/images/communication/611588/image_974178.png?width=640&height=360)](https://www.brighttalk.com/webcast/14807/611588)
 
