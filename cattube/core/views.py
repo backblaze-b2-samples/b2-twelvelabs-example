@@ -12,15 +12,12 @@ from django.views.generic.detail import DetailView, SingleObjectTemplateResponse
 from django.views.generic.edit import CreateView
 from django.views.generic.edit import DeleteView
 from django.views.generic.list import ListView
-from twelvelabs import BadRequestError
 
-from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID, POLL_TRANSLOADIT
+from cattube.settings import TWELVE_LABS_CLIENT, TWELVE_LABS_INDEX_ID, POLL_TRANSLOADIT, PAGE_SIZE
 from .forms import ResultForm
 from .models import Video, SearchResult, add_new_files
 from .tasks import poll_video_loading
 from .utils import create_signed_transloadit_options
-
-PAGE_SIZE = 12
 
 
 class VideoListView(ListView):

@@ -164,3 +164,6 @@ TWELVE_LABS_INDEX_ID = os.environ['TWELVE_LABS_INDEX_ID']
 TWELVE_LABS_POLL_INTERVAL = 1
 
 TWELVE_LABS_CLIENT = TwelveLabs(api_key=os.environ['TWELVE_LABS_API_KEY'])
+
+# How many videos to show in list pages
+PAGE_SIZE = 15
