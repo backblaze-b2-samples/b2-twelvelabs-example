@@ -1,6 +1,6 @@
 # Don't change boto3 version due to compatibility with Backblaze B2
 boto3==1.35.99
-Django==5.2
+Django==5.2.15
 django-storages==1.14.6
 djangorestframework==3.16.0
 gevent==24.11.1
