@@ -100,25 +100,13 @@ pip install -r requirements.txt
 
 ### Configuration
 
-Copy `.env.example` to `.env`, or set environment variables with your configuration:
+Copy `.env.example` to `.env`, or set the same environment variables in your deployment configuration.
 
-```bash
-# Backblaze B2 S3-compatible storage
-B2_APPLICATION_KEY_ID="<Backblaze Application Key ID>"
-B2_APPLICATION_KEY="<Backblaze Application Key>"
-B2_BUCKET_NAME="<Backblaze bucket name>"
-B2_REGION="<Backblaze region, e.g. us-west-004>"
-B2_PUBLIC_URL_BASE="https://<bucket>.s3.<region>.backblazeb2.com"
+The app uses B2's S3-compatible API. `B2_PUBLIC_URL_BASE` must use HTTPS and match the configured static bucket and region: `https://<bucket>.s3.<region>.backblazeb2.com`. If it is omitted, the app derives that value from the static bucket and region.
 
-TRANSLOADIT_KEY="<Transloadit auth key>"
-TRANSLOADIT_SECRET="<Transloadit auth secret>"
-TRANSLOADIT_TEMPLATE_ID="<Transloadit template ID>"
+Static assets use signed S3 URLs by default, so the documented private bucket setup works after `collectstatic`. If your existing deployment keeps static assets in a separate bucket or prefix, set the optional `B2_STATIC_*` variables shown in `.env.example` before running `collectstatic`.
 
-TWELVE_LABS_API_KEY="<Twelve Labs API Key>"
-TWELVE_LABS_INDEX_ID="<Twelve Labs Index ID>"
-
-WEB_APPLICATION_HOST='<Hostname of the app>'
-```
+For a zero-downtime migration from older `DEFAULT_*` and `STATIC_*` settings, add the new `B2_*` variables with the same bucket, region, key, and prefix values while keeping the old variables in place. Deploy this version, run `collectstatic` if the static bucket or prefix changed, purge any CDN or cached HTML that points at old static URLs, then remove the legacy variables in a later release.
 
 Run the usual commands to initialize a Django application:
 
