@@ -1,6 +1,8 @@
 import os
+from urllib.parse import urlparse
 
 # Never put credentials in your code!
+from botocore.config import Config
 from dotenv import load_dotenv
 from twelvelabs import TwelveLabs
 
@@ -107,42 +109,61 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'home'
 
-# TBD Fastly
-# AWS_S3_CUSTOM_DOMAIN = '...'
+B2_APPLICATION_KEY_ID = os.environ['B2_APPLICATION_KEY_ID']
+B2_APPLICATION_KEY = os.environ['B2_APPLICATION_KEY']
+B2_BUCKET_NAME = os.environ['B2_BUCKET_NAME']
+B2_REGION = os.environ['B2_REGION']
+B2_PUBLIC_URL_BASE = os.environ['B2_PUBLIC_URL_BASE'].rstrip('/')
+B2_ENDPOINT_URL = f'https://s3.{B2_REGION}.backblazeb2.com'
+B2_USER_AGENT = 'b2-twelvelabs-example (backblaze-b2-samples)'
+B2_CLIENT_CONFIG = Config(
+    signature_version='s3v4',
+    s3={'addressing_style': 'virtual'},
+    user_agent_extra=B2_USER_AGENT,
+)
 
-AWS_S3_OBJECT_PARAMETERS = {
+B2_PUBLIC_URL = urlparse(B2_PUBLIC_URL_BASE)
+B2_PUBLIC_CUSTOM_DOMAIN = f'{B2_PUBLIC_URL.netloc}{B2_PUBLIC_URL.path}'.rstrip('/')
+B2_PUBLIC_URL_PROTOCOL = f'{B2_PUBLIC_URL.scheme}:'
+
+B2_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400',
 }
 
 # Lifetime for presigned URLs
-AWS_QUERYSTRING_EXPIRE = 86400
+B2_QUERYSTRING_EXPIRE = 86400
 
-STATIC_S3_REGION_NAME = os.environ['STATIC_S3_REGION_NAME']
-STATIC_STORAGE_BUCKET_NAME = os.environ['STATIC_STORAGE_BUCKET_NAME']
-
-STATIC_URL = f'https://{STATIC_STORAGE_BUCKET_NAME}.s3.{STATIC_S3_REGION_NAME}.backblazeb2.com/'
+STATIC_URL = f'{B2_PUBLIC_URL_BASE}/static/'
 
 STORAGES = {
     "default": {
         "BACKEND": "cattube.storage.CachedS3Storage",
         "OPTIONS": {
-            "access_key": os.environ['DEFAULT_ACCESS_KEY_ID'],
-            "secret_key": os.environ['DEFAULT_SECRET_ACCESS_KEY'],
-            "endpoint_url": os.environ['DEFAULT_S3_ENDPOINT_URL'],
-            "region_name": os.environ['DEFAULT_S3_REGION_NAME'],
-            "bucket_name": os.environ['DEFAULT_STORAGE_BUCKET_NAME'],
-            "location": os.environ['DEFAULT_STORAGE_LOCATION'],
+            "access_key": B2_APPLICATION_KEY_ID,
+            "secret_key": B2_APPLICATION_KEY,
+            "endpoint_url": B2_ENDPOINT_URL,
+            "region_name": B2_REGION,
+            "bucket_name": B2_BUCKET_NAME,
+            "client_config": B2_CLIENT_CONFIG,
+            "object_parameters": B2_OBJECT_PARAMETERS,
+            "querystring_expire": B2_QUERYSTRING_EXPIRE,
         },
     },
     "staticfiles": {
         "BACKEND": "cattube.storage.CachedS3Storage",
         "OPTIONS": {
-            "access_key": os.environ['STATIC_ACCESS_KEY_ID'],
-            "secret_key": os.environ['STATIC_SECRET_ACCESS_KEY'],
-            "endpoint_url": os.environ['STATIC_S3_ENDPOINT_URL'],
-            "region_name": os.environ['STATIC_S3_REGION_NAME'],
-            "bucket_name": os.environ['STATIC_STORAGE_BUCKET_NAME'],
-            "location": os.environ['STATIC_STORAGE_LOCATION'],
+            "access_key": B2_APPLICATION_KEY_ID,
+            "secret_key": B2_APPLICATION_KEY,
+            "endpoint_url": B2_ENDPOINT_URL,
+            "region_name": B2_REGION,
+            "bucket_name": B2_BUCKET_NAME,
+            "location": "static",
+            "client_config": B2_CLIENT_CONFIG,
+            "custom_domain": B2_PUBLIC_CUSTOM_DOMAIN,
+            "object_parameters": B2_OBJECT_PARAMETERS,
+            "querystring_auth": False,
+            "querystring_expire": B2_QUERYSTRING_EXPIRE,
+            "url_protocol": B2_PUBLIC_URL_PROTOCOL,
         },
     },
 }
