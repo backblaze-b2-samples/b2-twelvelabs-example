@@ -2,7 +2,7 @@
 boto3==1.35.99
 Django==5.2.16
 django-storages==1.14.6
-djangorestframework==3.16.0
+djangorestframework==3.17.2
 gevent==24.11.1
 huey==2.5.3
 huey-django-orm==24.10.24.0
