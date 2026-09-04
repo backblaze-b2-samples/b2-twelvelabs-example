@@ -60,7 +60,7 @@ This webinar recording shows a previous version of the website in action and exp
 
 ## Backblaze B2
 
-Click **Buckets** in the navigation menu on the left, then **Create a Bucket**. Give the bucket a name (you may need more than one try, the bucket name must be globally unique!), leave the remaining settings, and click **Create a Bucket**. Make a note of the **Endpoint** shown in the bucket details; it's a domain name of the form `s3.us-west-004.backblazeb2.com`. Make a note also of the region portion of the endpoint; this is the string following `s3.` and preceding `.backblazeb2.com`. In the example above, it's `us-west-004`, but yours may be different. You can use the same bucket for static assets, such as the web app's CSS and JavaScript files, and your videos, or create a bucket for each purpose.  
+Click **Buckets** in the navigation menu on the left, then **Create a Bucket**. Give the bucket a name (you may need more than one try, the bucket name must be globally unique!), leave the remaining settings, and click **Create a Bucket**. Make a note of the **Endpoint** shown in the bucket details; it's a domain name of the form `s3.us-west-004.backblazeb2.com`. Make a note also of the region portion of the endpoint; this is the string following `s3.` and preceding `.backblazeb2.com`. In the example above, it's `us-west-004`, but yours may be different. The web app uses B2's S3-compatible API and stores uploaded videos and static assets in this bucket.
 
 You'll be creating two Application Keys–one each for TransloadIt and the web application. Why two keys? The two B2 clients need different levels of access: TransloadIt only needs to write raw and processed files; the web app and tasks need read/write access. 
 
@@ -100,34 +100,13 @@ pip install -r requirements.txt
 
 ### Configuration
 
-Copy `.env.template` to `.env`, or set environment variables with your configuration:
+Copy `.env.example` to `.env`, or set the same environment variables in your deployment configuration.
 
-```bash
-# Settings for bucket containing videos, thumbnails etc
-DEFAULT_ACCESS_KEY_ID="<Backblaze Application Key ID>"
-DEFAULT_SECRET_ACCESS_KEY="<Backblaze Application Key>"
-DEFAULT_S3_ENDPOINT_URL="<Backblaze bucket endpoint, e.g. s3.us-west-004.backblazeb2.com>"
-DEFAULT_S3_REGION_NAME="<Backblaze endpoint region, e.g. us-west-004>"
-DEFAULT_STORAGE_BUCKET_NAME="<Backblaze bucket name>"
-DEFAULT_STORAGE_LOCATION="<Path to files within bucket>"
+The app uses B2's S3-compatible API. `B2_PUBLIC_URL_BASE` must use HTTPS and match the configured static bucket and region: `https://<bucket>.s3.<region>.backblazeb2.com`. If it is omitted, the app derives that value from the static bucket and region.
 
-# Settings for bucket containing static assets
-STATIC_ACCESS_KEY_ID="<Backblaze Application Key ID>"
-STATIC_SECRET_ACCESS_KEY="<Backblaze Application Key>"
-STATIC_S3_ENDPOINT_URL="<Backblaze bucket endpoint, e.g. s3.us-west-004.backblazeb2.com>"
-STATIC_S3_REGION_NAME="<Backblaze endpoint region, e.g. us-west-004>"
-STATIC_STORAGE_BUCKET_NAME="<Backblaze bucket name>"
-STATIC_STORAGE_LOCATION="<Path to files within bucket>"
+Static assets use signed S3 URLs by default, so the documented private bucket setup works after `collectstatic`. If your existing deployment keeps static assets in a separate bucket or prefix, set the optional `B2_STATIC_*` variables shown in `.env.example` before running `collectstatic`.
 
-TRANSLOADIT_KEY="<Transloadit auth key>"
-TRANSLOADIT_SECRET="<Transloadit auth secret>"
-TRANSLOADIT_TEMPLATE_ID="<Transloadit template ID>"
-
-TWELVE_LABS_API_KEY="<Twelve Labs API Key>"
-TWELVE_LABS_INDEX_ID="<Twelve Labs Index ID>"
-
-WEB_APPLICATION_HOST='<Hostname of the app>'
-```
+For a zero-downtime migration from older `DEFAULT_*` and `STATIC_*` settings, add the new `B2_*` variables with the same bucket, region, key, and prefix values while keeping the old variables in place. Deploy this version, run `collectstatic` if the static bucket or prefix changed, purge any CDN or cached HTML that points at old static URLs, then remove the legacy variables in a later release.
 
 Run the usual commands to initialize a Django application:
 

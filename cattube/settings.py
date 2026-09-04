@@ -1,6 +1,9 @@
 import os
+from urllib.parse import urlparse
 
 # Never put credentials in your code!
+from botocore.config import Config
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 from twelvelabs import TwelveLabs
 
@@ -107,43 +110,143 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'home'
 
-# TBD Fastly
-# AWS_S3_CUSTOM_DOMAIN = '...'
+_MISSING = object()
 
-AWS_S3_OBJECT_PARAMETERS = {
+
+def env(name, *legacy_names, default=_MISSING):
+    for env_name in (name, *legacy_names):
+        value = os.environ.get(env_name)
+        if value:
+            return value
+
+    if default is not _MISSING:
+        return default
+
+    accepted_names = ', '.join((name, *legacy_names))
+    raise ImproperlyConfigured(
+        f'Missing required environment variable: {accepted_names}'
+    )
+
+
+def b2_endpoint_url(region):
+    return f'https://s3.{region}.backblazeb2.com'
+
+
+def validate_b2_public_url_base(public_url_base, bucket_name, region_name):
+    parsed_url = urlparse(public_url_base)
+    expected_host = f'{bucket_name}.s3.{region_name}.backblazeb2.com'
+
+    if parsed_url.scheme != 'https':
+        raise ImproperlyConfigured('B2_PUBLIC_URL_BASE must start with https://')
+    if not parsed_url.netloc:
+        raise ImproperlyConfigured('B2_PUBLIC_URL_BASE must include a host')
+    if parsed_url.username or parsed_url.password:
+        raise ImproperlyConfigured('B2_PUBLIC_URL_BASE must not include user info')
+    if parsed_url.port:
+        raise ImproperlyConfigured('B2_PUBLIC_URL_BASE must not include a port')
+    if parsed_url.query or parsed_url.fragment:
+        raise ImproperlyConfigured(
+            'B2_PUBLIC_URL_BASE must not include a query string or fragment'
+        )
+    if parsed_url.path not in ('', '/'):
+        raise ImproperlyConfigured('B2_PUBLIC_URL_BASE must not include a path')
+    if parsed_url.hostname != expected_host:
+        raise ImproperlyConfigured(
+            'B2_PUBLIC_URL_BASE host must be '
+            f'{expected_host}; got {parsed_url.hostname or "<empty>"}'
+        )
+
+    return public_url_base.rstrip('/')
+
+
+B2_APPLICATION_KEY_ID = env('B2_APPLICATION_KEY_ID', 'DEFAULT_ACCESS_KEY_ID')
+B2_APPLICATION_KEY = env('B2_APPLICATION_KEY', 'DEFAULT_SECRET_ACCESS_KEY')
+B2_BUCKET_NAME = env('B2_BUCKET_NAME', 'DEFAULT_STORAGE_BUCKET_NAME')
+B2_REGION = env('B2_REGION', 'DEFAULT_S3_REGION_NAME')
+B2_MEDIA_LOCATION = env('B2_MEDIA_LOCATION', 'DEFAULT_STORAGE_LOCATION', default='')
+B2_STATIC_APPLICATION_KEY_ID = env(
+    'B2_STATIC_APPLICATION_KEY_ID',
+    'STATIC_ACCESS_KEY_ID',
+    default=B2_APPLICATION_KEY_ID,
+)
+B2_STATIC_APPLICATION_KEY = env(
+    'B2_STATIC_APPLICATION_KEY',
+    'STATIC_SECRET_ACCESS_KEY',
+    default=B2_APPLICATION_KEY,
+)
+B2_STATIC_BUCKET_NAME = env(
+    'B2_STATIC_BUCKET_NAME',
+    'STATIC_STORAGE_BUCKET_NAME',
+    default=B2_BUCKET_NAME,
+)
+B2_STATIC_REGION = env('B2_STATIC_REGION', 'STATIC_S3_REGION_NAME', default=B2_REGION)
+B2_STATIC_LOCATION = env(
+    'B2_STATIC_LOCATION',
+    'STATIC_STORAGE_LOCATION',
+    default='static',
+)
+B2_PUBLIC_URL_BASE = validate_b2_public_url_base(
+    env(
+        'B2_PUBLIC_URL_BASE',
+        default=f'https://{B2_STATIC_BUCKET_NAME}.s3.{B2_STATIC_REGION}.backblazeb2.com',
+    ),
+    B2_STATIC_BUCKET_NAME,
+    B2_STATIC_REGION,
+)
+B2_ENDPOINT_URL = b2_endpoint_url(B2_REGION)
+B2_STATIC_ENDPOINT_URL = b2_endpoint_url(B2_STATIC_REGION)
+B2_USER_AGENT = 'b2-twelvelabs-example (backblaze-b2-samples)'
+B2_CLIENT_CONFIG = Config(
+    signature_version='s3v4',
+    s3={'addressing_style': 'virtual'},
+    user_agent_extra=B2_USER_AGENT,
+)
+
+B2_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400',
 }
 
 # Lifetime for presigned URLs
-AWS_QUERYSTRING_EXPIRE = 86400
+B2_QUERYSTRING_EXPIRE = 86400
 
-STATIC_S3_REGION_NAME = os.environ['STATIC_S3_REGION_NAME']
-STATIC_STORAGE_BUCKET_NAME = os.environ['STATIC_STORAGE_BUCKET_NAME']
+B2_BASE_STORAGE_OPTIONS = {
+    "client_config": B2_CLIENT_CONFIG,
+    "object_parameters": B2_OBJECT_PARAMETERS,
+    "querystring_expire": B2_QUERYSTRING_EXPIRE,
+}
 
-STATIC_URL = f'https://{STATIC_STORAGE_BUCKET_NAME}.s3.{STATIC_S3_REGION_NAME}.backblazeb2.com/'
+B2_DEFAULT_STORAGE_OPTIONS = {
+    **B2_BASE_STORAGE_OPTIONS,
+    "access_key": B2_APPLICATION_KEY_ID,
+    "secret_key": B2_APPLICATION_KEY,
+    "endpoint_url": B2_ENDPOINT_URL,
+    "region_name": B2_REGION,
+    "bucket_name": B2_BUCKET_NAME,
+}
+if B2_MEDIA_LOCATION:
+    B2_DEFAULT_STORAGE_OPTIONS["location"] = B2_MEDIA_LOCATION
+
+B2_STATIC_STORAGE_OPTIONS = {
+    **B2_BASE_STORAGE_OPTIONS,
+    "access_key": B2_STATIC_APPLICATION_KEY_ID,
+    "secret_key": B2_STATIC_APPLICATION_KEY,
+    "endpoint_url": B2_STATIC_ENDPOINT_URL,
+    "region_name": B2_STATIC_REGION,
+    "bucket_name": B2_STATIC_BUCKET_NAME,
+}
+if B2_STATIC_LOCATION:
+    B2_STATIC_STORAGE_OPTIONS["location"] = B2_STATIC_LOCATION
+
+STATIC_URL = f'{B2_PUBLIC_URL_BASE}/'
 
 STORAGES = {
     "default": {
         "BACKEND": "cattube.storage.CachedS3Storage",
-        "OPTIONS": {
-            "access_key": os.environ['DEFAULT_ACCESS_KEY_ID'],
-            "secret_key": os.environ['DEFAULT_SECRET_ACCESS_KEY'],
-            "endpoint_url": os.environ['DEFAULT_S3_ENDPOINT_URL'],
-            "region_name": os.environ['DEFAULT_S3_REGION_NAME'],
-            "bucket_name": os.environ['DEFAULT_STORAGE_BUCKET_NAME'],
-            "location": os.environ['DEFAULT_STORAGE_LOCATION'],
-        },
+        "OPTIONS": B2_DEFAULT_STORAGE_OPTIONS,
     },
     "staticfiles": {
         "BACKEND": "cattube.storage.CachedS3Storage",
-        "OPTIONS": {
-            "access_key": os.environ['STATIC_ACCESS_KEY_ID'],
-            "secret_key": os.environ['STATIC_SECRET_ACCESS_KEY'],
-            "endpoint_url": os.environ['STATIC_S3_ENDPOINT_URL'],
-            "region_name": os.environ['STATIC_S3_REGION_NAME'],
-            "bucket_name": os.environ['STATIC_STORAGE_BUCKET_NAME'],
-            "location": os.environ['STATIC_STORAGE_LOCATION'],
-        },
+        "OPTIONS": B2_STATIC_STORAGE_OPTIONS,
     },
 }
 
